@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Summer Checkin 系统架构图",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main-request-path",
+        "label": "主请求路径",
+        "focus": [
+          "web",
+          "api",
+          "agent",
+          "modelpool",
+          "llm",
+          "postgres"
+        ],
+        "note": "从浏览器到 LLM 提供商:Next.js API 触发智能体 runtime,经模型池调用外部模型,轨迹落库。"
+      },
+      {
+        "id": "knowledge-rag",
+        "label": "知识库检索",
+        "focus": [
+          "api",
+          "rag",
+          "postgres"
+        ],
+        "note": "长文档切块入 pgvector,检索后 rerank,支撑 AI 问答。"
+      },
+      {
+        "id": "chat-room",
+        "label": "实时聊天",
+        "focus": [
+          "web",
+          "chatroom",
+          "auth"
+        ],
+        "note": "聊天室是独立 WebSocket sidecar 进程,握手期完成鉴权与 Origin 白名单校验。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Web 客户端",
+      "sublabel": "Next.js 16 · R3F",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Better Auth",
+      "sublabel": "Cookie 会话",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Next.js API",
+      "sublabel": "src/app/api",
+      "pos": [
+        280,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "智能体 runtime",
+      "sublabel": "四步推理 · 日报/周报",
+      "pos": [
+        520,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "modelpool",
+      "type": "backend",
+      "label": "模型池",
+      "sublabel": "LOW/HIGH · token 记账",
+      "pos": [
+        780,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "LLM 提供商",
+      "sublabel": "Agnes · 阿里云",
+      "pos": [
+        1030,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "chatroom",
+      "type": "backend",
+      "label": "聊天室 sidecar",
+      "sublabel": "独立进程 · :3001",
+      "pos": [
+        40,
+        430
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "rag",
+      "type": "backend",
+      "label": "RAG 知识库",
+      "sublabel": "切块 · 嵌入 · rerank",
+      "pos": [
+        280,
+        430
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "Prisma · pgvector",
+      "pos": [
+        520,
+        430
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "oss",
+      "type": "cloud",
+      "label": "阿里云 OSS",
+      "sublabel": "头像预签名直传",
+      "pos": [
+        780,
+        60
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "web-login",
+      "from": "web",
+      "to": "auth",
+      "label": "登录",
+      "variant": "security",
+      "labelAt": [
+        75,
+        210
+      ]
+    },
+    {
+      "id": "web-to-api",
+      "from": "web",
+      "to": "api",
+      "label": "HTTP · SSR",
+      "variant": "emphasis"
+    },
+    {
+      "id": "web-to-chatroom",
+      "from": "web",
+      "to": "chatroom",
+      "label": "WS :3001",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        110,
+        328
+      ]
+    },
+    {
+      "id": "api-to-agent",
+      "from": "api",
+      "to": "agent",
+      "label": "daily-run 触发",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agent-to-modelpool",
+      "from": "agent",
+      "to": "modelpool",
+      "label": "LLM 调用",
+      "variant": "emphasis"
+    },
+    {
+      "id": "modelpool-to-llm",
+      "from": "modelpool",
+      "to": "llm",
+      "label": "额度耗尽降级"
+    },
+    {
+      "id": "api-to-rag",
+      "from": "api",
+      "to": "rag",
+      "label": "知识检索",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        355,
+        328
+      ]
+    },
+    {
+      "id": "rag-to-postgres",
+      "from": "rag",
+      "to": "postgres",
+      "label": "pgvector"
+    },
+    {
+      "id": "agent-to-postgres",
+      "from": "agent",
+      "to": "postgres",
+      "label": "轨迹 · 记忆",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        600,
+        328
+      ]
+    },
+    {
+      "id": "web-to-oss",
+      "from": "web",
+      "to": "oss",
+      "label": "头像预签名直传",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "前端 · 交互",
+      "items": [
+        "Next.js 16 App Router 单页应用,React 19 + Tailwind v4 + R3F/GSAP",
+        "3D 小岛随累计时长成长 · 年度热力图 · 番茄钟专注写入 StudyRecord"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "AI 链路",
+      "items": [
+        "agent/daily-run 触发 observe→analyze→plan→execute,轨迹入 AgentRun/AgentStep,日报/周报 + 长期记忆",
+        "模型池 LOW/HIGH 分档:Agnes 免费额度耗尽自动降级阿里云,token 记账限额,VIP 豁免",
+        "RAG:长文档切块 → 嵌入 → pgvector 检索 → rerank,支持 md/pdf/docx/txt"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "聊天 · 认证 · 存储",
+      "items": [
+        "聊天室为独立 WebSocket sidecar 进程 (:3001),握手期 Cookie 鉴权 + Origin 白名单 fail-closed",
+        "Better Auth Cookie 会话;头像经阿里云 OSS 预签名直传,支持历史回滚"
+      ]
+    }
+  ]
+}
