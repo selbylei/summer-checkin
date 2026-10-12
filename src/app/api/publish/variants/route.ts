@@ -48,17 +48,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ errors: check.errors }, { status: 422 });
   }
 
+  try {
     const variant = await prisma.postVariant.create({
-    data: {
-      postId,
-      platform,
-      title,
-      body: content,
-      tags,
-      // formatCheck 列存校验结果 JSON（Task 1 schema 注释：校验不过→422 不落库，这里只存通过结果）
-      formatCheck: JSON.stringify(check),
-      ...(typeof body.coverPath === "string" && body.coverPath ? { coverPath: body.coverPath } : {}),
-    },
-  });
-  return NextResponse.json(variant);
+      data: {
+        postId,
+        platform,
+        title,
+        body: content,
+        tags,
+        // formatCheck 列存校验结果 JSON（Task 1 schema 注释：校验不过→422 不落库，这里只存通过结果）
+        formatCheck: JSON.stringify(check),
+        ...(typeof body.coverPath === "string" && body.coverPath ? { coverPath: body.coverPath } : {}),
+      },
+    });
+    return NextResponse.json(variant);
+  } catch (e) {
+    // 并发兜底：同 (postId,platform) 两个写都过 pre-check 时，后者撞唯一约束
+    // postvariant_postId_platform_key（P2002）→ 409 同 pre-check 文案；其他异常 rethrow
+    if ((e as { code?: string }).code === "P2002") {
+      return NextResponse.json({ error: `该 post 的 ${platform} 适配版已存在` }, { status: 409 });
+    }
+    throw e;
+  }
 }

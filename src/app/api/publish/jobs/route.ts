@@ -36,8 +36,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const job = await prisma.publishJob.create({ data: { variantId, scheduledAt } });
-  return NextResponse.json(job);
+  try {
+    const job = await prisma.publishJob.create({ data: { variantId, scheduledAt } });
+    return NextResponse.json(job);
+  } catch (e) {
+    // 并发兜底：同 variantId 两个 create 都过 pre-check 时，后者撞唯一约束
+    // publishjob_variantId_key（P2002）→ 409；其他异常 rethrow
+    if ((e as { code?: string }).code === "P2002") {
+      return NextResponse.json(
+        { error: "该 variant 已有任务，不可重建——改期/取消走 PATCH /api/publish/jobs/:id" },
+        { status: 409 }
+      );
+    }
+    throw e;
+  }
 }
 
 // GET /api/publish/jobs：当前 user 的排期任务列表（排期页；含 variant 摘要供显示平台/状态）
