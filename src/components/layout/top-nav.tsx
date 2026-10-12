@@ -13,6 +13,7 @@ import {
   X,
   Leaf,
   Tree,
+  Broadcast,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { AppAvatar } from "@/components/ui/app-avatar";
@@ -49,6 +50,7 @@ const STATIC_NAV = [
   { href: "/plans", label: "计划" },
   { href: "/docs", label: "阅读" },
   { href: "/statistics", label: "主页" },
+  { href: "/publish", label: "发布" },
 ] as const;
 
 const STATIC_FULL_NAV = [
@@ -56,6 +58,7 @@ const STATIC_FULL_NAV = [
   { href: "/plans", label: "计划", icon: ListChecks },
   { href: "/docs", label: "阅读", icon: Note },
   { href: "/statistics", label: "主页", icon: ChartLine },
+  { href: "/publish", label: "发布", icon: Broadcast },
 ] as const;
 
 export function TopNav({ user }: TopNavProps) {
