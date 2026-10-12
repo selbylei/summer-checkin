@@ -4,8 +4,9 @@
 //   GET  /login?platform=xhs    → 后台启 Easel login（--qr-out/--status-file 约定路径），返 {qrPath,statusFile}
 //   GET  /login-status?platform → 读 statusFile JSON 透传（不存在→{status:"pending"}）
 //   POST /plan  {variantId}     → plan 子命令 dry-run，回 {ok,stdout}；有 Job 则写 Log(PLAN)
-//   POST /publish {jobId}       → processJob（批准闸门 + 读回成功标记 + 日志）
-//   POST /jobs/:id/cancel       → Job=CANCELLED（仅 PENDING/RUNNING 可取消）
+//   POST /publish {jobId}       → 202 fire-and-forget：校验 Job 存在后后台 processJob（裁决②，不等待完成；异常自行落 lastError）
+//   GET  /jobs/:id             → 读 DB 返 job（Task 7 轮询出状态；不存在→404）
+//   POST /jobs/:id/cancel      → Job=CANCELLED（仅 PENDING/RUNNING 可取消）
 import "../env"; // 独立进程自载 .env（dotenv；与 ws sidecar 同惯例，必须最先 import）
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { promises as fs } from "node:fs";
@@ -40,7 +41,7 @@ function platformFrom(url: URL): string {
   return (url.searchParams.get("platform") ?? "").trim().toLowerCase();
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse) {
+export async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const p = url.pathname;
   const method = req.method ?? "GET";
@@ -58,7 +59,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         ok: false,
         error:
           platform === "gzh"
-            ? "gzh P1 未接入（web_publisher 无 gzh 适配器）"
+            ? "gzh P1 未接入（P2 官方 API 未接入，web_publisher 无 gzh 适配器）"
             : "platform 参数缺失或不支持（P1 仅 xhs/douyin）",
       });
       return;
@@ -108,7 +109,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     }
     const script = easelScriptFor(variant.platform);
     if (!script) {
-      json(res, 501, { ok: false, error: `${variant.platform} P1 未接入（web_publisher 无 gzh 适配器）` });
+      json(res, 501, { ok: false, error: `${variant.platform} P1 未接入（P2 官方 API 未接入，web_publisher 无 gzh 适配器）` });
       return;
     }
     const result = await spawnEasel([script, "plan", ...contentArgs(variant, variant.post)]);
@@ -139,15 +140,28 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       json(res, 400, { ok: false, error: "jobId 参数缺失" });
       return;
     }
-    let status: string;
-    try {
-      status = await processJob(jobId);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      json(res, msg.includes("not found") ? 404 : 500, { ok: false, error: msg });
+    // 裁决②：fire-and-forget——校验 Job 存在即返 202，后台跑 processJob（最长 ~10min 不挂 HTTP）；
+    // 状态由 Task 7 轮询 GET /jobs/:id；processJob 内部异常已自行落 lastError，此处 .catch 仅兜底（如 markFailed 自身失败）
+    const job = await prisma.publishJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      json(res, 404, { ok: false, error: `job not found: ${jobId}` });
       return;
     }
-    json(res, 200, { ok: status === "SUCCESS", status });
+    void processJob(jobId).catch((e) => {
+      console.error(`[publish-worker] processJob(${jobId}) 后台执行异常:`, e);
+    });
+    json(res, 202, { ok: true, jobId });
+    return;
+  }
+  const jobGetMatch = p.match(/^\/jobs\/([^/]+)$/);
+  if (method === "GET" && jobGetMatch) {
+    const jobId = decodeURIComponent(jobGetMatch[1]);
+    const job = await prisma.publishJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      json(res, 404, { ok: false, error: `job not found: ${jobId}` });
+      return;
+    }
+    json(res, 200, { ok: true, job });
     return;
   }
   const cancelMatch = p.match(/^\/jobs\/([^/]+)\/cancel$/);
@@ -177,6 +191,9 @@ const server = createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`[publish-worker] 发布 worker 已启动 :${PORT}`);
-});
+// 仅作为主进程启动时监听（import 本模块做路由单测不产生 listen 副作用）
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  server.listen(PORT, () => {
+    console.log(`[publish-worker] 发布 worker 已启动 :${PORT}`);
+  });
+}

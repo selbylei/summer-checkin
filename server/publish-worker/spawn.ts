@@ -24,8 +24,14 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 /** 默认登录态根目录（Global Constraints；spawn 侧注入，Easel 脚本自身默认 ~/.easel-browser-profiles 被覆盖） */
 export const DEFAULT_PROFILE_BASE = "~/.publish-profiles";
 
-/** 接受 --profile-base 的子命令（argparse 源：add_common 挂在 login/plan/publish/publish-video/whoami；web 为 login-qr） */
-const PROFILE_SUBCMDS = new Set(["login", "login-qr", "plan", "publish", "publish-video", "whoami"]);
+/**
+ * 接受 --profile-base 的子命令（逐脚本核对 argparse 源）：
+ * - xhs/douyin：add_common（含 --profile-base）只挂在 login/publish/publish-video/whoami；
+ *   plan 只挂 add_content（xhs_publish.py:1038 / douyin_publish.py:1474）——向 plan 注入即 argparse exit 2（C1）。
+ * - web_publisher：login/login-qr/publish/whoami 及 plan 均挂 add_common（含 --profile-base），但 P1 不 spawn web 脚本（GZH 501）；
+ *   注入集合取三脚本的交集安全集（plan 因 xhs/douyin 不支持而排除）。
+ */
+const PROFILE_SUBCMDS = new Set(["login", "login-qr", "publish", "publish-video", "whoami"]);
 
 /**
  * 拼完整 CLI 参数（纯函数，便于测试）：[script, subcmd?, ...rest]

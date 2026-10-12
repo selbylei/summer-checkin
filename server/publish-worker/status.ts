@@ -23,8 +23,24 @@ export function loginPaths(platform: LoginPlatform): { qrPath: string; statusFil
   };
 }
 
+/** 抖音发布状态文件（douyin publish 的 --status-file，I1 短信墙轮询；JSON 结构=login_state：{state,message,qr,ts}） */
+export const DOUYIN_PUBLISH_STATUS_FILE = path.join(QRCODE_DIR, "douyin-publish.json");
+
 /**
- * 读登录/发布状态文件（Easel login_state JSON：status=starting|success|error…）。
+ * 读抖音发布状态文件（Easel douyin publish --status-file 落盘）。容错：不存在/解析失败 → {}
+ * 调用方按 .state/.message 判断（state=sms_required 或 error+「短信验证」message=短信墙）
+ */
+export async function readDouyinPublishStatus(): Promise<Record<string, unknown>> {
+  try {
+    const text = await fs.readFile(path.join(REPO_ROOT, DOUYIN_PUBLISH_STATUS_FILE), "utf8");
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 读登录/发布状态文件（Easel login_state JSON：state=starting|success|error…）。
  * 容错：文件不存在/解析失败 → {status:"pending"}（前端轮询到 success/error 才停）
  */
 export async function readLoginStatus(platform: LoginPlatform): Promise<Record<string, unknown>> {

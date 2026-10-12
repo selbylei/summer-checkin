@@ -4,6 +4,7 @@
 import type { JobStatus, LogStage, Platform } from "@prisma-generated/enums";
 import { prisma } from "../db";
 import { spawnEasel } from "./spawn";
+import { DOUYIN_PUBLISH_STATUS_FILE, readDouyinPublishStatus } from "./status";
 
 /** Easel stdout 读回成功标记（xhs/douyin publish 成功路径公共子串；dry-run 输出只含「成功校验」不会误中） */
 export const PUBLISH_SUCCESS_MARKER = "发布成功";
@@ -49,27 +50,40 @@ export async function processJob(jobId: string): Promise<JobStatus> {
     include: { variant: { include: { post: true } } },
   });
   if (!job) throw new Error(`job not found: ${jobId}`);
-  const variant = job.variant;
+  // fire-and-forget（POST /publish 202 不 await）：链路意外异常落 lastError 转 FAILED，不 reject 到路由
+  //（路由侧仅剩 console 兜底；此处 markFailed 自身失败才真正 reject）
+  try {
+    return await runJob(job.id, job.variant, job.variant.post);
+  } catch (e) {
+    await markFailed(jobId, `发布链路异常：${e instanceof Error ? e.message : String(e)}`);
+    return "FAILED";
+  }
+}
 
+async function runJob(
+  jobId: string,
+  variant: VariantLike & { id: string; status: string; platform: Platform },
+  post: PostLike,
+): Promise<JobStatus> {
   // ① 批准闸门：非 APPROVED 一律不 spawn（Global Constraints 硬闸门）
   if (variant.status !== "APPROVED") {
     await markFailed(jobId, `需批准：Variant 状态为 ${variant.status}（仅 APPROVED 可发布，批准后重发）`);
     return "FAILED";
   }
 
-  // ② GZH P1 未接入（web_publisher 无 gzh 适配器）：明确 FAILED，不静默、不 spawn
+  // ② GZH P1 未接入（P2 官方 API 未接入；web_publisher 无 gzh 适配器）：明确 FAILED，不静默、不 spawn
   const script = easelScriptFor(variant.platform);
   if (!script) {
     await markFailed(
       jobId,
-      `${variant.platform} 平台 P1 未接入：web_publisher 的 --platform 仅支持 kuaishou/weixin-channels/zhihu，无公众号(gzh)适配器`,
+      `${variant.platform} 平台 P1 未接入（P2 官方 API 未接入）：web_publisher 的 --platform 仅支持 kuaishou/weixin-channels/zhihu，无公众号(gzh)适配器`,
     );
     return "FAILED";
   }
 
   await prisma.publishJob.update({ where: { id: jobId }, data: { status: "RUNNING", lastError: null } });
 
-  const content = contentArgs(variant, job.variant.post);
+  const content = contentArgs(variant, post);
 
   // plan dry-run：离线步骤预览；失败=参数/内容不过，不进入真发
   const plan = await spawnEasel([script, "plan", ...content]);
@@ -79,8 +93,25 @@ export async function processJob(jobId: string): Promise<JobStatus> {
   }
 
   // publish --exec：退出 0 且 stdout 含读回成功标记才算成功（未核实绝不标记成功）
-  const pub = await spawnEasel([script, "publish", "--exec", ...content]);
+  // I1 抖音短信墙：douyin publish 附加 --status-file（douyin add_common 专属参数，供短信墙轮询）；
+  // xhs publish 无此参数（argparse 源），绝不传
+  const publishArgs = [script, "publish", "--exec", ...content];
+  if (variant.platform === "DOUYIN") publishArgs.push("--status-file", DOUYIN_PUBLISH_STATUS_FILE);
+  const pub = await spawnEasel(publishArgs);
   if (pub.code !== 0) {
+    // I1：抖音短信墙 → 任务 FAILED、Log(stage=PUBLISH) 提示「需人工验证码」（不静默吞掉）
+    if (variant.platform === "DOUYIN") {
+      const st = await readDouyinPublishStatus();
+      if (isSmsWallStatus(st)) {
+        await writePublishLog(
+          jobId,
+          "PUBLISH",
+          `发布触发抖音短信验证墙，需人工验证码：${String(st.message ?? "") || "等待验证码超时/未输入，请回填验证码后重发"}`,
+        );
+        await markFailed(jobId, `publish 失败（code=${pub.code}）：触发短信验证墙，需人工验证码（${tail(pub.stderr)}）`);
+        return "FAILED";
+      }
+    }
     await markFailed(jobId, `publish 失败（code=${pub.code}）：${tail(pub.stderr)}`);
     return "FAILED";
   }
@@ -104,6 +135,17 @@ export async function processJob(jobId: string): Promise<JobStatus> {
   await prisma.publishJob.update({ where: { id: jobId }, data: { status: "SUCCESS", lastError: null } });
   await prisma.postVariant.update({ where: { id: variant.id }, data: { status: "PUBLISHED" } });
   return "SUCCESS";
+}
+
+/**
+ * 抖音短信墙状态判定（读源 douyin_publish.py + login_state.py，不猜）：
+ * - 等待窗口内 write_status(sf, "sms_required", …)（:520/:525/:560）；
+ * - 墙超时退出前终态写 state="error" 且 message="发布短信验证超时未完成"（:561）——同样需人工回填验证码。
+ * 其余 error（如「发布未确认」）不命中，保持「一般失败 0 log」。
+ */
+function isSmsWallStatus(st: Record<string, unknown>): boolean {
+  if (st.state === "sms_required") return true;
+  return st.state === "error" && String(st.message ?? "").includes("短信验证");
 }
 
 function markFailed(jobId: string, reason: string) {
