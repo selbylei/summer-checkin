@@ -32,6 +32,7 @@ export type AccountProfileMinAggregateOutputType = {
   style: string | null
   tone: string | null
   constraints: string | null
+  userId: string | null
 }
 
 export type AccountProfileMaxAggregateOutputType = {
@@ -42,6 +43,7 @@ export type AccountProfileMaxAggregateOutputType = {
   style: string | null
   tone: string | null
   constraints: string | null
+  userId: string | null
 }
 
 export type AccountProfileCountAggregateOutputType = {
@@ -52,6 +54,7 @@ export type AccountProfileCountAggregateOutputType = {
   style: number
   tone: number
   constraints: number
+  userId: number
   _all: number
 }
 
@@ -64,6 +67,7 @@ export type AccountProfileMinAggregateInputType = {
   style?: true
   tone?: true
   constraints?: true
+  userId?: true
 }
 
 export type AccountProfileMaxAggregateInputType = {
@@ -74,6 +78,7 @@ export type AccountProfileMaxAggregateInputType = {
   style?: true
   tone?: true
   constraints?: true
+  userId?: true
 }
 
 export type AccountProfileCountAggregateInputType = {
@@ -84,6 +89,7 @@ export type AccountProfileCountAggregateInputType = {
   style?: true
   tone?: true
   constraints?: true
+  userId?: true
   _all?: true
 }
 
@@ -167,6 +173,7 @@ export type AccountProfileGroupByOutputType = {
   style: string
   tone: string
   constraints: string | null
+  userId: string
   _count: AccountProfileCountAggregateOutputType | null
   _min: AccountProfileMinAggregateOutputType | null
   _max: AccountProfileMaxAggregateOutputType | null
@@ -198,6 +205,7 @@ export type AccountProfileWhereInput = {
   style?: Prisma.StringFilter<"AccountProfile"> | string
   tone?: Prisma.StringFilter<"AccountProfile"> | string
   constraints?: Prisma.StringNullableFilter<"AccountProfile"> | string | null
+  userId?: Prisma.StringFilter<"AccountProfile"> | string
 }
 
 export type AccountProfileOrderByWithRelationInput = {
@@ -208,6 +216,7 @@ export type AccountProfileOrderByWithRelationInput = {
   style?: Prisma.SortOrder
   tone?: Prisma.SortOrder
   constraints?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type AccountProfileWhereUniqueInput = Prisma.AtLeast<{
@@ -221,6 +230,7 @@ export type AccountProfileWhereUniqueInput = Prisma.AtLeast<{
   style?: Prisma.StringFilter<"AccountProfile"> | string
   tone?: Prisma.StringFilter<"AccountProfile"> | string
   constraints?: Prisma.StringNullableFilter<"AccountProfile"> | string | null
+  userId?: Prisma.StringFilter<"AccountProfile"> | string
 }, "id">
 
 export type AccountProfileOrderByWithAggregationInput = {
@@ -231,6 +241,7 @@ export type AccountProfileOrderByWithAggregationInput = {
   style?: Prisma.SortOrder
   tone?: Prisma.SortOrder
   constraints?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrder
   _count?: Prisma.AccountProfileCountOrderByAggregateInput
   _max?: Prisma.AccountProfileMaxOrderByAggregateInput
   _min?: Prisma.AccountProfileMinOrderByAggregateInput
@@ -247,6 +258,7 @@ export type AccountProfileScalarWhereWithAggregatesInput = {
   style?: Prisma.StringWithAggregatesFilter<"AccountProfile"> | string
   tone?: Prisma.StringWithAggregatesFilter<"AccountProfile"> | string
   constraints?: Prisma.StringNullableWithAggregatesFilter<"AccountProfile"> | string | null
+  userId?: Prisma.StringWithAggregatesFilter<"AccountProfile"> | string
 }
 
 export type AccountProfileCreateInput = {
@@ -257,6 +269,7 @@ export type AccountProfileCreateInput = {
   style: string
   tone: string
   constraints?: string | null
+  userId: string
 }
 
 export type AccountProfileUncheckedCreateInput = {
@@ -267,6 +280,7 @@ export type AccountProfileUncheckedCreateInput = {
   style: string
   tone: string
   constraints?: string | null
+  userId: string
 }
 
 export type AccountProfileUpdateInput = {
@@ -277,6 +291,7 @@ export type AccountProfileUpdateInput = {
   style?: Prisma.StringFieldUpdateOperationsInput | string
   tone?: Prisma.StringFieldUpdateOperationsInput | string
   constraints?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
 }
 
 export type AccountProfileUncheckedUpdateInput = {
@@ -287,6 +302,7 @@ export type AccountProfileUncheckedUpdateInput = {
   style?: Prisma.StringFieldUpdateOperationsInput | string
   tone?: Prisma.StringFieldUpdateOperationsInput | string
   constraints?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
 }
 
 export type AccountProfileCreateManyInput = {
@@ -297,6 +313,7 @@ export type AccountProfileCreateManyInput = {
   style: string
   tone: string
   constraints?: string | null
+  userId: string
 }
 
 export type AccountProfileUpdateManyMutationInput = {
@@ -307,6 +324,7 @@ export type AccountProfileUpdateManyMutationInput = {
   style?: Prisma.StringFieldUpdateOperationsInput | string
   tone?: Prisma.StringFieldUpdateOperationsInput | string
   constraints?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
 }
 
 export type AccountProfileUncheckedUpdateManyInput = {
@@ -317,6 +335,7 @@ export type AccountProfileUncheckedUpdateManyInput = {
   style?: Prisma.StringFieldUpdateOperationsInput | string
   tone?: Prisma.StringFieldUpdateOperationsInput | string
   constraints?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
 }
 
 export type AccountProfileCountOrderByAggregateInput = {
@@ -327,6 +346,7 @@ export type AccountProfileCountOrderByAggregateInput = {
   style?: Prisma.SortOrder
   tone?: Prisma.SortOrder
   constraints?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type AccountProfileMaxOrderByAggregateInput = {
@@ -337,6 +357,7 @@ export type AccountProfileMaxOrderByAggregateInput = {
   style?: Prisma.SortOrder
   tone?: Prisma.SortOrder
   constraints?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type AccountProfileMinOrderByAggregateInput = {
@@ -347,6 +368,7 @@ export type AccountProfileMinOrderByAggregateInput = {
   style?: Prisma.SortOrder
   tone?: Prisma.SortOrder
   constraints?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 
@@ -359,6 +381,7 @@ export type AccountProfileSelect<ExtArgs extends runtime.Types.Extensions.Intern
   style?: boolean
   tone?: boolean
   constraints?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["accountProfile"]>
 
 export type AccountProfileSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -369,6 +392,7 @@ export type AccountProfileSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   style?: boolean
   tone?: boolean
   constraints?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["accountProfile"]>
 
 export type AccountProfileSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -379,6 +403,7 @@ export type AccountProfileSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   style?: boolean
   tone?: boolean
   constraints?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["accountProfile"]>
 
 export type AccountProfileSelectScalar = {
@@ -389,9 +414,10 @@ export type AccountProfileSelectScalar = {
   style?: boolean
   tone?: boolean
   constraints?: boolean
+  userId?: boolean
 }
 
-export type AccountProfileOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "platform" | "handle" | "positioning" | "style" | "tone" | "constraints", ExtArgs["result"]["accountProfile"]>
+export type AccountProfileOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "platform" | "handle" | "positioning" | "style" | "tone" | "constraints" | "userId", ExtArgs["result"]["accountProfile"]>
 
 export type $AccountProfilePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "AccountProfile"
@@ -404,6 +430,7 @@ export type $AccountProfilePayload<ExtArgs extends runtime.Types.Extensions.Inte
     style: string
     tone: string
     constraints: string | null
+    userId: string
   }, ExtArgs["result"]["accountProfile"]>
   composites: {}
 }
@@ -834,6 +861,7 @@ export interface AccountProfileFieldRefs {
   readonly style: Prisma.FieldRef<"AccountProfile", 'String'>
   readonly tone: Prisma.FieldRef<"AccountProfile", 'String'>
   readonly constraints: Prisma.FieldRef<"AccountProfile", 'String'>
+  readonly userId: Prisma.FieldRef<"AccountProfile", 'String'>
 }
     
 

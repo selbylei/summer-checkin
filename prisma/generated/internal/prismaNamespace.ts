@@ -2861,6 +2861,7 @@ export const PostScalarFieldEnum = {
   mediaPaths: 'mediaPaths',
   status: 'status',
   fromHotlist: 'fromHotlist',
+  userId: 'userId',
   createdAt: 'createdAt'
 } as const
 
@@ -2912,7 +2913,8 @@ export const AccountProfileScalarFieldEnum = {
   positioning: 'positioning',
   style: 'style',
   tone: 'tone',
-  constraints: 'constraints'
+  constraints: 'constraints',
+  userId: 'userId'
 } as const
 
 export type AccountProfileScalarFieldEnum = (typeof AccountProfileScalarFieldEnum)[keyof typeof AccountProfileScalarFieldEnum]

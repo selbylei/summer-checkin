@@ -30,6 +30,7 @@ export type PostMinAggregateOutputType = {
   body: string | null
   status: $Enums.PostStatus | null
   fromHotlist: boolean | null
+  userId: string | null
   createdAt: Date | null
 }
 
@@ -39,6 +40,7 @@ export type PostMaxAggregateOutputType = {
   body: string | null
   status: $Enums.PostStatus | null
   fromHotlist: boolean | null
+  userId: string | null
   createdAt: Date | null
 }
 
@@ -49,6 +51,7 @@ export type PostCountAggregateOutputType = {
   mediaPaths: number
   status: number
   fromHotlist: number
+  userId: number
   createdAt: number
   _all: number
 }
@@ -60,6 +63,7 @@ export type PostMinAggregateInputType = {
   body?: true
   status?: true
   fromHotlist?: true
+  userId?: true
   createdAt?: true
 }
 
@@ -69,6 +73,7 @@ export type PostMaxAggregateInputType = {
   body?: true
   status?: true
   fromHotlist?: true
+  userId?: true
   createdAt?: true
 }
 
@@ -79,6 +84,7 @@ export type PostCountAggregateInputType = {
   mediaPaths?: true
   status?: true
   fromHotlist?: true
+  userId?: true
   createdAt?: true
   _all?: true
 }
@@ -162,6 +168,7 @@ export type PostGroupByOutputType = {
   mediaPaths: string[]
   status: $Enums.PostStatus
   fromHotlist: boolean
+  userId: string
   createdAt: Date
   _count: PostCountAggregateOutputType | null
   _min: PostMinAggregateOutputType | null
@@ -193,6 +200,7 @@ export type PostWhereInput = {
   mediaPaths?: Prisma.StringNullableListFilter<"Post">
   status?: Prisma.EnumPostStatusFilter<"Post"> | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFilter<"Post"> | boolean
+  userId?: Prisma.StringFilter<"Post"> | string
   createdAt?: Prisma.DateTimeFilter<"Post"> | Date | string
   variants?: Prisma.PostVariantListRelationFilter
 }
@@ -204,6 +212,7 @@ export type PostOrderByWithRelationInput = {
   mediaPaths?: Prisma.SortOrder
   status?: Prisma.SortOrder
   fromHotlist?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   variants?: Prisma.PostVariantOrderByRelationAggregateInput
 }
@@ -218,6 +227,7 @@ export type PostWhereUniqueInput = Prisma.AtLeast<{
   mediaPaths?: Prisma.StringNullableListFilter<"Post">
   status?: Prisma.EnumPostStatusFilter<"Post"> | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFilter<"Post"> | boolean
+  userId?: Prisma.StringFilter<"Post"> | string
   createdAt?: Prisma.DateTimeFilter<"Post"> | Date | string
   variants?: Prisma.PostVariantListRelationFilter
 }, "id">
@@ -229,6 +239,7 @@ export type PostOrderByWithAggregationInput = {
   mediaPaths?: Prisma.SortOrder
   status?: Prisma.SortOrder
   fromHotlist?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.PostCountOrderByAggregateInput
   _max?: Prisma.PostMaxOrderByAggregateInput
@@ -245,6 +256,7 @@ export type PostScalarWhereWithAggregatesInput = {
   mediaPaths?: Prisma.StringNullableListFilter<"Post">
   status?: Prisma.EnumPostStatusWithAggregatesFilter<"Post"> | $Enums.PostStatus
   fromHotlist?: Prisma.BoolWithAggregatesFilter<"Post"> | boolean
+  userId?: Prisma.StringWithAggregatesFilter<"Post"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Post"> | Date | string
 }
 
@@ -255,6 +267,7 @@ export type PostCreateInput = {
   mediaPaths?: Prisma.PostCreatemediaPathsInput | string[]
   status?: $Enums.PostStatus
   fromHotlist?: boolean
+  userId: string
   createdAt?: Date | string
   variants?: Prisma.PostVariantCreateNestedManyWithoutPostInput
 }
@@ -266,6 +279,7 @@ export type PostUncheckedCreateInput = {
   mediaPaths?: Prisma.PostCreatemediaPathsInput | string[]
   status?: $Enums.PostStatus
   fromHotlist?: boolean
+  userId: string
   createdAt?: Date | string
   variants?: Prisma.PostVariantUncheckedCreateNestedManyWithoutPostInput
 }
@@ -277,6 +291,7 @@ export type PostUpdateInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   variants?: Prisma.PostVariantUpdateManyWithoutPostNestedInput
 }
@@ -288,6 +303,7 @@ export type PostUncheckedUpdateInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   variants?: Prisma.PostVariantUncheckedUpdateManyWithoutPostNestedInput
 }
@@ -299,6 +315,7 @@ export type PostCreateManyInput = {
   mediaPaths?: Prisma.PostCreatemediaPathsInput | string[]
   status?: $Enums.PostStatus
   fromHotlist?: boolean
+  userId: string
   createdAt?: Date | string
 }
 
@@ -309,6 +326,7 @@ export type PostUpdateManyMutationInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -319,6 +337,7 @@ export type PostUncheckedUpdateManyInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -337,6 +356,7 @@ export type PostCountOrderByAggregateInput = {
   mediaPaths?: Prisma.SortOrder
   status?: Prisma.SortOrder
   fromHotlist?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -346,6 +366,7 @@ export type PostMaxOrderByAggregateInput = {
   body?: Prisma.SortOrder
   status?: Prisma.SortOrder
   fromHotlist?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -355,6 +376,7 @@ export type PostMinOrderByAggregateInput = {
   body?: Prisma.SortOrder
   status?: Prisma.SortOrder
   fromHotlist?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -397,6 +419,7 @@ export type PostCreateWithoutVariantsInput = {
   mediaPaths?: Prisma.PostCreatemediaPathsInput | string[]
   status?: $Enums.PostStatus
   fromHotlist?: boolean
+  userId: string
   createdAt?: Date | string
 }
 
@@ -407,6 +430,7 @@ export type PostUncheckedCreateWithoutVariantsInput = {
   mediaPaths?: Prisma.PostCreatemediaPathsInput | string[]
   status?: $Enums.PostStatus
   fromHotlist?: boolean
+  userId: string
   createdAt?: Date | string
 }
 
@@ -433,6 +457,7 @@ export type PostUpdateWithoutVariantsInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -443,6 +468,7 @@ export type PostUncheckedUpdateWithoutVariantsInput = {
   mediaPaths?: Prisma.PostUpdatemediaPathsInput | string[]
   status?: Prisma.EnumPostStatusFieldUpdateOperationsInput | $Enums.PostStatus
   fromHotlist?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -484,6 +510,7 @@ export type PostSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   mediaPaths?: boolean
   status?: boolean
   fromHotlist?: boolean
+  userId?: boolean
   createdAt?: boolean
   variants?: boolean | Prisma.Post$variantsArgs<ExtArgs>
   _count?: boolean | Prisma.PostCountOutputTypeDefaultArgs<ExtArgs>
@@ -496,6 +523,7 @@ export type PostSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   mediaPaths?: boolean
   status?: boolean
   fromHotlist?: boolean
+  userId?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["post"]>
 
@@ -506,6 +534,7 @@ export type PostSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   mediaPaths?: boolean
   status?: boolean
   fromHotlist?: boolean
+  userId?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["post"]>
 
@@ -516,10 +545,11 @@ export type PostSelectScalar = {
   mediaPaths?: boolean
   status?: boolean
   fromHotlist?: boolean
+  userId?: boolean
   createdAt?: boolean
 }
 
-export type PostOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "body" | "mediaPaths" | "status" | "fromHotlist" | "createdAt", ExtArgs["result"]["post"]>
+export type PostOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "body" | "mediaPaths" | "status" | "fromHotlist" | "userId" | "createdAt", ExtArgs["result"]["post"]>
 export type PostInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   variants?: boolean | Prisma.Post$variantsArgs<ExtArgs>
   _count?: boolean | Prisma.PostCountOutputTypeDefaultArgs<ExtArgs>
@@ -539,6 +569,7 @@ export type $PostPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     mediaPaths: string[]
     status: $Enums.PostStatus
     fromHotlist: boolean
+    userId: string
     createdAt: Date
   }, ExtArgs["result"]["post"]>
   composites: {}
@@ -970,6 +1001,7 @@ export interface PostFieldRefs {
   readonly mediaPaths: Prisma.FieldRef<"Post", 'String[]'>
   readonly status: Prisma.FieldRef<"Post", 'PostStatus'>
   readonly fromHotlist: Prisma.FieldRef<"Post", 'Boolean'>
+  readonly userId: Prisma.FieldRef<"Post", 'String'>
   readonly createdAt: Prisma.FieldRef<"Post", 'DateTime'>
 }
     

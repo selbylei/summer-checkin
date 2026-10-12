@@ -487,10 +487,13 @@ model Post {
   mediaPaths String[]
   status      PostStatus @default(DRAFT)
   fromHotlist Boolean    @default(false)
+  // user 域隔离（Task 6 缺口裁决①；Job/Variant/Log 经 Post 归属天然隔离，不加列）
+  userId      String
   createdAt   DateTime   @default(now())
 
   variants PostVariant[]
 
+  @@index([userId])
   @@map("post")
 }
 
@@ -557,7 +560,10 @@ model AccountProfile {
   style       String
   tone        String
   constraints String?
+  // user 域隔离（Task 6 缺口裁决①；账号画像挂所属 user，与 Post 同口径）
+  userId      String
 
+  @@index([userId])
   @@map("accountprofile")
 }
 
