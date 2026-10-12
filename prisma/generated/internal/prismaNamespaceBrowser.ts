@@ -73,7 +73,12 @@ export const ModelName = {
   PlanTemplate: 'PlanTemplate',
   DocumentTemplate: 'DocumentTemplate',
   TokenUsage: 'TokenUsage',
-  Announcement: 'Announcement'
+  Announcement: 'Announcement',
+  Post: 'Post',
+  PostVariant: 'PostVariant',
+  PublishJob: 'PublishJob',
+  PublishLog: 'PublishLog',
+  AccountProfile: 'AccountProfile'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -418,6 +423,70 @@ export const AnnouncementScalarFieldEnum = {
 } as const
 
 export type AnnouncementScalarFieldEnum = (typeof AnnouncementScalarFieldEnum)[keyof typeof AnnouncementScalarFieldEnum]
+
+
+export const PostScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  body: 'body',
+  mediaPaths: 'mediaPaths',
+  status: 'status',
+  fromHotlist: 'fromHotlist',
+  createdAt: 'createdAt'
+} as const
+
+export type PostScalarFieldEnum = (typeof PostScalarFieldEnum)[keyof typeof PostScalarFieldEnum]
+
+
+export const PostVariantScalarFieldEnum = {
+  id: 'id',
+  postId: 'postId',
+  platform: 'platform',
+  title: 'title',
+  body: 'body',
+  tags: 'tags',
+  coverPath: 'coverPath',
+  status: 'status',
+  formatCheck: 'formatCheck'
+} as const
+
+export type PostVariantScalarFieldEnum = (typeof PostVariantScalarFieldEnum)[keyof typeof PostVariantScalarFieldEnum]
+
+
+export const PublishJobScalarFieldEnum = {
+  id: 'id',
+  variantId: 'variantId',
+  scheduledAt: 'scheduledAt',
+  status: 'status',
+  lastError: 'lastError'
+} as const
+
+export type PublishJobScalarFieldEnum = (typeof PublishJobScalarFieldEnum)[keyof typeof PublishJobScalarFieldEnum]
+
+
+export const PublishLogScalarFieldEnum = {
+  id: 'id',
+  jobId: 'jobId',
+  stage: 'stage',
+  detail: 'detail',
+  screenshotPath: 'screenshotPath',
+  createdAt: 'createdAt'
+} as const
+
+export type PublishLogScalarFieldEnum = (typeof PublishLogScalarFieldEnum)[keyof typeof PublishLogScalarFieldEnum]
+
+
+export const AccountProfileScalarFieldEnum = {
+  id: 'id',
+  platform: 'platform',
+  handle: 'handle',
+  positioning: 'positioning',
+  style: 'style',
+  tone: 'tone',
+  constraints: 'constraints'
+} as const
+
+export type AccountProfileScalarFieldEnum = (typeof AccountProfileScalarFieldEnum)[keyof typeof AccountProfileScalarFieldEnum]
 
 
 export const SortOrder = {

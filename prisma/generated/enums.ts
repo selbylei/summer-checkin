@@ -9,7 +9,50 @@
 * 🟢 You can import this file directly.
 */
 
+export const Platform = {
+  GZH: 'GZH',
+  DOUYIN: 'DOUYIN',
+  XHS: 'XHS'
+} as const
+
+export type Platform = (typeof Platform)[keyof typeof Platform]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const PostStatus = {
+  DRAFT: 'DRAFT',
+  READY: 'READY',
+  PUBLISHED: 'PUBLISHED',
+  FAILED: 'FAILED'
+} as const
+
+export type PostStatus = (typeof PostStatus)[keyof typeof PostStatus]
+
+
+export const VariantStatus = {
+  DRAFT: 'DRAFT',
+  APPROVED: 'APPROVED',
+  PUBLISHED: 'PUBLISHED'
+} as const
+
+export type VariantStatus = (typeof VariantStatus)[keyof typeof VariantStatus]
+
+
+export const JobStatus = {
+  PENDING: 'PENDING',
+  RUNNING: 'RUNNING',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus]
+
+
+export const LogStage = {
+  PLAN: 'PLAN',
+  PUBLISH: 'PUBLISH',
+  VERIFY: 'VERIFY',
+  COLLECT: 'COLLECT'
+} as const
+
+export type LogStage = (typeof LogStage)[keyof typeof LogStage]

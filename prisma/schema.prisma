@@ -441,3 +441,123 @@ model Announcement {
   @@index([published, createdAt])
   @@map("announcement")
 }
+
+// ── 发布平台 P1（设计稿 doc/发布平台设计.md §3；PostMetric 属 P3 不建） ──
+
+/// 发布目标平台。GZH=公众号、DOUYIN=抖音、XHS=小红书（sidecar/worker 按此分发脚本）
+enum Platform {
+  GZH
+  DOUYIN
+  XHS
+}
+
+enum PostStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  FAILED
+}
+
+enum VariantStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum LogStage {
+  PLAN
+  PUBLISH
+  VERIFY
+  COLLECT
+}
+
+model Post {
+  // 内容主体（P1 内容中枢；fromHotlist 为 P3 热点入口预留）
+  id          String     @id @default(cuid())
+  title       String
+  body        String
+  mediaPaths String[]
+  status      PostStatus @default(DRAFT)
+  fromHotlist Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  variants PostVariant[]
+
+  @@map("post")
+}
+
+model PostVariant {
+  // 每平台适配版；每 Post 每 platform 至多 1 个（设计稿 §3 联合唯一约束）
+  id          String        @id @default(cuid())
+  postId      String
+  platform    Platform
+  title       String
+  body        String
+  tags        String[]
+  coverPath   String?
+  status      VariantStatus @default(DRAFT)
+  // 字数/标签校验结果 JSON（Task 3 format-check 产出，校验不过→API 422 不落库）
+  formatCheck String?
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // 1:1 排期：改期=改 Job.scheduledAt，不重建（variantId @unique 在 PublishJob 侧）
+  job PublishJob?
+
+  @@unique([postId, platform])
+  @@index([postId])
+  @@map("postvariant")
+}
+
+model PublishJob {
+  // 排期任务；与 Variant 1:1（variantId @unique），worker 每分钟扫 due 的 PENDING（Task 5）
+  id          String    @id @default(cuid())
+  variantId   String    @unique
+  scheduledAt DateTime
+  status      JobStatus @default(PENDING)
+  lastError   String?
+
+  variant PostVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  logs    PublishLog[]
+
+  // 排期器扫描：status=PENDING AND scheduledAt<=now
+  @@index([status, scheduledAt])
+  @@map("publishjob")
+}
+
+model PublishLog {
+  // 执行留痕：PLAN/PUBLISH/VERIFY/COLLECT 分段，验证日志读回对账（设计稿 §4）
+  id             String   @id @default(cuid())
+  jobId          String
+  stage          LogStage
+  detail         String
+  screenshotPath String?
+  createdAt      DateTime @default(now())
+
+  job PublishJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // 日志页按 job 拉时间线（Task 6 GET /api/publish/logs?jobId=）
+  @@index([jobId])
+  @@map("publishlog")
+}
+
+model AccountProfile {
+  // 账号画像：单账号起步（设计稿 §1），P1 只存不消费，P2 起填入 pi 会话；字段留扩展位
+  id          String   @id @default(cuid())
+  platform    Platform
+  handle      String
+  positioning String
+  style       String
+  tone        String
+  constraints String?
+
+  @@map("accountprofile")
+}
+

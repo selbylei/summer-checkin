@@ -156,3 +156,28 @@ export type TokenUsage = Prisma.TokenUsageModel
  * 全站公告 —— 不按用户存，一份所有人看同一份
  */
 export type Announcement = Prisma.AnnouncementModel
+/**
+ * Model Post
+ * 
+ */
+export type Post = Prisma.PostModel
+/**
+ * Model PostVariant
+ * 
+ */
+export type PostVariant = Prisma.PostVariantModel
+/**
+ * Model PublishJob
+ * 
+ */
+export type PublishJob = Prisma.PublishJobModel
+/**
+ * Model PublishLog
+ * 
+ */
+export type PublishLog = Prisma.PublishLogModel
+/**
+ * Model AccountProfile
+ * 
+ */
+export type AccountProfile = Prisma.AccountProfileModel
