@@ -56,8 +56,7 @@ export async function processJob(jobId: string): Promise<JobStatus> {
   try {
     return await runJob(job.id, job.variant, job.variant.post);
   } catch (e) {
-    await markFailed(jobId, `发布链路异常：${e instanceof Error ? e.message : String(e)}`);
-    return "FAILED";
+    return markFailed(jobId, `发布链路异常：${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -68,29 +67,36 @@ async function runJob(
 ): Promise<JobStatus> {
   // ① 批准闸门：非 APPROVED 一律不 spawn（Global Constraints 硬闸门）
   if (variant.status !== "APPROVED") {
-    await markFailed(jobId, `需批准：Variant 状态为 ${variant.status}（仅 APPROVED 可发布，批准后重发）`);
-    return "FAILED";
+    return markFailed(jobId, `需批准：Variant 状态为 ${variant.status}（仅 APPROVED 可发布，批准后重发）`);
   }
 
   // ② GZH P1 未接入（P2 官方 API 未接入；web_publisher 无 gzh 适配器）：明确 FAILED，不静默、不 spawn
   const script = easelScriptFor(variant.platform);
   if (!script) {
-    await markFailed(
+    return markFailed(
       jobId,
       `${variant.platform} 平台 P1 未接入（P2 官方 API 未接入）：web_publisher 的 --platform 仅支持 kuaishou/weixin-channels/zhihu，无公众号(gzh)适配器`,
     );
-    return "FAILED";
   }
 
-  await prisma.publishJob.update({ where: { id: jobId }, data: { status: "RUNNING", lastError: null } });
+  // I-1 并发双跑防护：PENDING→RUNNING CAS（updateMany 检 count）——被并发触发/排期轮次抢占（count=0）
+  // 则不 spawn 第二跑，重读库返现态（job 行仍在；理论缺失才落 FAILED 兜底不外抛）
+  const cas = await prisma.publishJob.updateMany({
+    where: { id: jobId, status: "PENDING" },
+    data: { status: "RUNNING", lastError: null },
+  });
+  if (cas.count === 0) {
+    const cur = await prisma.publishJob.findUnique({ where: { id: jobId } });
+    console.warn(`[publish-worker] processJob(${jobId}) 已被并发抢占（CAS count=0，现态 ${cur?.status ?? "missing"}），不 spawn`);
+    return cur?.status ?? "FAILED";
+  }
 
   const content = contentArgs(variant, post);
 
   // plan dry-run：离线步骤预览；失败=参数/内容不过，不进入真发
   const plan = await spawnEasel([script, "plan", ...content]);
   if (plan.code !== 0) {
-    await markFailed(jobId, `plan 失败（code=${plan.code}）：${tail(plan.stderr)}`);
-    return "FAILED";
+    return markFailed(jobId, `plan 失败（code=${plan.code}）：${tail(plan.stderr)}`);
   }
 
   // publish --exec：退出 0 且 stdout 含读回成功标记才算成功（未核实绝不标记成功）
@@ -113,16 +119,13 @@ async function runJob(
           "PUBLISH",
           `发布触发抖音短信验证墙，需人工验证码：${String(st.message ?? "") || "等待验证码超时/未输入，请回填验证码后重发"}`,
         );
-        await markFailed(jobId, `publish 失败（code=${pub.code}）：触发短信验证墙，需人工验证码（${tail(pub.stderr)}）`);
-        return "FAILED";
+        return markFailed(jobId, `publish 失败（code=${pub.code}）：触发短信验证墙，需人工验证码（${tail(pub.stderr)}）`);
       }
     }
-    await markFailed(jobId, `publish 失败（code=${pub.code}）：${tail(pub.stderr)}`);
-    return "FAILED";
+    return markFailed(jobId, `publish 失败（code=${pub.code}）：${tail(pub.stderr)}`);
   }
   if (!pub.stdout.includes(PUBLISH_SUCCESS_MARKER)) {
-    await markFailed(jobId, `发布未核实：退出 0 但 stdout 无读回成功标记（不把未核实当成功）——${tail(pub.stdout)}`);
-    return "FAILED";
+    return markFailed(jobId, `发布未核实：退出 0 但 stdout 无读回成功标记（不把未核实当成功）——${tail(pub.stdout)}`);
   }
   await writePublishLog(jobId, "PUBLISH", extractReadback(pub.stdout, variant.platform));
 
@@ -137,7 +140,16 @@ async function runJob(
   }
   await writePublishLog(jobId, "VERIFY", verifyDetail);
 
-  await prisma.publishJob.update({ where: { id: jobId }, data: { status: "SUCCESS", lastError: null } });
+  // M1 cancel 竞态防护：终态写 CAS——cancel 已抢先置 CANCELLED（count=0）则不覆盖、不推 Variant，返现态
+  const termCas = await prisma.publishJob.updateMany({
+    where: { id: jobId, status: { in: ["PENDING", "RUNNING"] } },
+    data: { status: "SUCCESS", lastError: null },
+  });
+  if (termCas.count === 0) {
+    const cur = await prisma.publishJob.findUnique({ where: { id: jobId } });
+    console.warn(`[publish-worker] processJob(${jobId}) SUCCESS 终态写被 cancel 抢占（现态 ${cur?.status ?? "missing"}），不覆盖`);
+    return cur?.status ?? "CANCELLED";
+  }
   await prisma.postVariant.update({ where: { id: variant.id }, data: { status: "PUBLISHED" } });
   return "SUCCESS";
 }
@@ -153,11 +165,18 @@ function isSmsWallStatus(st: Record<string, unknown>): boolean {
   return st.state === "error" && String(st.message ?? "").includes("短信验证");
 }
 
-function markFailed(jobId: string, reason: string) {
-  return prisma.publishJob.update({
-    where: { id: jobId },
+/** M1 cancel 竞态防护：终态写 CAS（仅 PENDING/RUNNING 可写 FAILED）——已被 cancel 置 CANCELLED（count=0）则不覆盖，记 warn 返现态 */
+async function markFailed(jobId: string, reason: string): Promise<JobStatus> {
+  const cas = await prisma.publishJob.updateMany({
+    where: { id: jobId, status: { in: ["PENDING", "RUNNING"] } },
     data: { status: "FAILED", lastError: reason.slice(0, 500) },
   });
+  if (cas.count === 0) {
+    const cur = await prisma.publishJob.findUnique({ where: { id: jobId } });
+    console.warn(`[publish-worker] markFailed(${jobId}) FAILED 终态写被 cancel 抢占（现态 ${cur?.status ?? "missing"}），不覆盖`);
+    return cur?.status ?? "CANCELLED";
+  }
+  return "FAILED";
 }
 
 /** 尾摘要：留最后 300 字符（脚本错误信息在尾部，头部多为进度噪音） */

@@ -80,6 +80,7 @@ curl -s -X POST localhost:3022/plan -H 'Content-Type: application/json' -d '{"va
 # ⑥ 立即发（worker 端 fire-and-forget；不等 60s 排期 tick 则手动触发）
 curl -s -X POST localhost:3022/publish -H 'Content-Type: application/json' -d '{"jobId":"<jobId>"}'
 # → 202 {"ok":true,"jobId":"…"}（后台 processJob，最长 ~10min 不挂 HTTP；UI 侧排期页 5s / 适配页 2.5s 轮询）
+# → 409 = 任务已被触发/进行中，勿重试（job 非 PENDING——RUNNING/终态/CANCELLED 一律 409；重发需新任务）
 ```
 
 ### 2.4 结果确认

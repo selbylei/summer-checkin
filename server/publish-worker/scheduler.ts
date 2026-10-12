@@ -4,6 +4,8 @@ import type { PrismaClient, PublishJob } from "@prisma-generated/client";
 import { processJob } from "./process-job";
 
 const TICK_MS = 60_000;
+// I-1 单飞：上一轮 tick 未完（长链路 processJob >60s）则跳过本轮，防与手动触发/下轮 tick 并发双跑
+let inFlight = false;
 
 /**
  * 到期的可自动发布 Job（status=PENDING 且 scheduledAt<=now，且 variant.status=APPROVED）。
@@ -50,9 +52,15 @@ export async function tick(prisma: PrismaClient): Promise<number> {
  */
 export function startScheduler(prisma: PrismaClient): NodeJS.Timeout {
   const timer = setInterval(() => {
-    tick(prisma).catch((e) => {
-      console.error("[scheduler] tick 异常（等待下轮）:", e instanceof Error ? e.message : e);
-    });
+    if (inFlight) return;
+    inFlight = true;
+    tick(prisma)
+      .catch((e) => {
+        console.error("[scheduler] tick 异常（等待下轮）:", e instanceof Error ? e.message : e);
+      })
+      .finally(() => {
+        inFlight = false;
+      });
   }, TICK_MS);
   timer.unref();
   return timer;

@@ -2,7 +2,8 @@
 
 // 排期页任务列表（brief Step 4）：GET /jobs（含 variant 摘要）；改期/取消走 PATCH /jobs/:id；
 // 存在 PENDING/RUNNING 时每 5s 轮询一次（全部终态停；卸载清理）。FAILED 且 lastError 含
-// 「短信验证码」→ 黄条提示（brief Step 4 文案）。未批准的 variant 任务置灰：排期只发已批准内容。
+// 「需人工验证码」→ 黄条提示（brief Step 4 文案；匹配词 = worker markFailed 落库的稳定串「需人工验证码」，
+// lastError 里另拼的 stderr 摘要不定，旧词「短信验证码」断链）。未批准的 variant 任务置灰：排期只发已批准内容。
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowClockwise, Timer, Warning } from "@phosphor-icons/react";
@@ -158,7 +159,7 @@ export function ScheduleBoard() {
         {(jobs ?? []).map((job) => {
           // 未批准 = variant 仍 DRAFT；PUBLISHED=已批准放行（worker 发布成功后置 PUBLISHED），SUCCESS 行不得置灰
           const unapproved = job.variant.status === "DRAFT";
-          const isSmsWall = job.status === "FAILED" && (job.lastError ?? "").includes("短信验证码");
+          const isSmsWall = job.status === "FAILED" && (job.lastError ?? "").includes("需人工验证码");
           const canReschedule = job.status === "PENDING";
           const canCancel = job.status === "PENDING" || job.status === "RUNNING";
           return (

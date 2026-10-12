@@ -4,7 +4,7 @@
 //   GET  /login?platform=xhs    → 后台启 Easel login（--qr-out/--status-file 约定路径），返 {qrPath,statusFile}
 //   GET  /login-status?platform → 读 statusFile JSON 透传（不存在→{status:"pending"}）
 //   POST /plan  {variantId}     → plan 子命令 dry-run，回 {ok,stdout}；有 Job 则写 Log(PLAN)
-//   POST /publish {jobId}       → 202 fire-and-forget：校验 Job 存在后后台 processJob（裁决②，不等待完成；异常自行落 lastError）
+//   POST /publish {jobId}       → 202 fire-and-forget：校验 Job 存在且 status=PENDING 后后台 processJob（裁决②，不等待完成；异常自行落 lastError）；非 PENDING → 409
 //   GET  /jobs/:id             → 读 DB 返 job（Task 7 轮询出状态；不存在→404）
 //   POST /jobs/:id/cancel      → Job=CANCELLED（仅 PENDING/RUNNING 可取消）
 import "../env"; // 独立进程自载 .env（dotenv；与 ws sidecar 同惯例，必须最先 import）
@@ -146,6 +146,15 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
     const job = await prisma.publishJob.findUnique({ where: { id: jobId } });
     if (!job) {
       json(res, 404, { ok: false, error: `job not found: ${jobId}` });
+      return;
+    }
+    // I-1 并发双跑防护：仅 PENDING 可触发——RUNNING/终态/CANCELLED 一律 409（勿重试；排期 tick 与 worker 内 CAS 双保险）
+    if (job.status !== "PENDING") {
+      json(res, 409, {
+        ok: false,
+        status: job.status,
+        error: `任务已被触发/进行中（现态 ${job.status}，仅 PENDING 可触发），勿重试`,
+      });
       return;
     }
     void processJob(jobId).catch((e) => {

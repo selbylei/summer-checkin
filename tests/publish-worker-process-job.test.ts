@@ -15,7 +15,7 @@ vi.mock("../server/publish-worker/status", async (importOriginal) => {
 });
 vi.mock("../server/db", () => ({
   prisma: {
-    publishJob: { findUnique: vi.fn(), update: vi.fn() },
+    publishJob: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     postVariant: { findUnique: vi.fn(), update: vi.fn() },
     publishLog: { create: vi.fn() },
   },
@@ -28,7 +28,7 @@ import { processJob } from "../server/publish-worker/process-job";
 
 const mSpawn = spawnEasel as unknown as Mock;
 const mStatusFile = readDouyinPublishStatus as unknown as Mock;
-const mJob = prisma.publishJob as unknown as { findUnique: Mock; update: Mock };
+const mJob = prisma.publishJob as unknown as { findUnique: Mock; update: Mock; updateMany: Mock };
 const mVariant = prisma.postVariant as unknown as { findUnique: Mock; update: Mock };
 const mLog = prisma.publishLog as unknown as { create: Mock };
 
@@ -59,6 +59,8 @@ function makeJob(over: { variantStatus?: string; platform?: string } = {}) {
 beforeEach(() => {
   vi.resetAllMocks();
   mJob.update.mockResolvedValue({});
+  // 默认 CAS 全部命中（count=1）；CAS 用例各自覆盖
+  mJob.updateMany.mockResolvedValue({ count: 1 });
   mVariant.update.mockResolvedValue({});
   mLog.create.mockResolvedValue({});
   mStatusFile.mockResolvedValue({});
@@ -70,7 +72,7 @@ describe("processJob 批准闸门", () => {
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
     expect(mSpawn).not.toHaveBeenCalled();
-    const data = mJob.update.mock.calls[0][0].data;
+    const data = mJob.updateMany.mock.calls[0][0].data;
     expect(data.status).toBe("FAILED");
     expect(String(data.lastError)).toContain("需批准");
   });
@@ -130,8 +132,8 @@ describe("processJob 主链路", () => {
     expect(String(mLog.create.mock.calls[0][0].data.detail)).toContain("发布成功");
     expect(String(mLog.create.mock.calls[1][0].data.detail)).toContain("loggedIn");
 
-    // Job=SUCCESS（清 lastError）+ Variant→PUBLISHED
-    const lastJobUpdate = mJob.update.mock.calls.at(-1)![0].data;
+    // Job=SUCCESS（清 lastError）+ Variant→PUBLISHED（终态写走 updateMany CAS）
+    const lastJobUpdate = mJob.updateMany.mock.calls.at(-1)![0].data;
     expect(lastJobUpdate.status).toBe("SUCCESS");
     expect(mVariant.update).toHaveBeenCalledWith({ where: { id: "var1" }, data: { status: "PUBLISHED" } });
   });
@@ -144,7 +146,7 @@ describe("processJob 主链路", () => {
     });
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
-    const data = mJob.update.mock.calls.at(-1)![0].data;
+    const data = mJob.updateMany.mock.calls.at(-1)![0].data;
     expect(data.status).toBe("FAILED");
     expect(String(data.lastError)).toContain("未登录");
     // 失败路径不写 PUBLISH/VERIFY log
@@ -161,7 +163,7 @@ describe("processJob 主链路", () => {
     });
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
-    expect(String(mJob.update.mock.calls.at(-1)![0].data.lastError)).toContain("未核实");
+    expect(String(mJob.updateMany.mock.calls.at(-1)![0].data.lastError)).toContain("未核实");
   });
 
   it("④ GZH 平台 P1 未接入（P2 官方 API 未接入，web_publisher 无 gzh 适配器）→ FAILED 且不调 spawn", async () => {
@@ -169,7 +171,7 @@ describe("processJob 主链路", () => {
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
     expect(mSpawn).not.toHaveBeenCalled();
-    const le = String(mJob.update.mock.calls[0][0].data.lastError);
+    const le = String(mJob.updateMany.mock.calls[0][0].data.lastError);
     expect(le).toContain("GZH");
     expect(le).toContain("P2 官方 API 未接入");
   });
@@ -194,8 +196,8 @@ describe("processJob 主链路", () => {
     expect(mLog.create).toHaveBeenCalledTimes(1);
     expect(mLog.create.mock.calls[0][0].data.stage).toBe("PUBLISH");
     expect(String(mLog.create.mock.calls[0][0].data.detail)).toContain("需人工验证码");
-    // Job=FAILED + lastError 提示人工验证码
-    const last = mJob.update.mock.calls.at(-1)![0].data;
+    // Job=FAILED + lastError 提示人工验证码（终态写走 updateMany CAS）
+    const last = mJob.updateMany.mock.calls.at(-1)![0].data;
     expect(last.status).toBe("FAILED");
     expect(String(last.lastError)).toContain("需人工验证码");
   });
@@ -228,7 +230,7 @@ describe("processJob 主链路", () => {
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
     expect(mLog.create).not.toHaveBeenCalled();
-    expect(String(mJob.update.mock.calls.at(-1)![0].data.lastError)).not.toContain("需人工验证码");
+    expect(String(mJob.updateMany.mock.calls.at(-1)![0].data.lastError)).not.toContain("需人工验证码");
   });
 
   it("I1d 残留小修：DOUYIN publish 前删掉旧 douyin-publish.json（上轮「短信验证」终态不残留误判）", async () => {
@@ -267,7 +269,7 @@ describe("processJob 主链路", () => {
     });
     const status = await processJob("job1");
     expect(status).toBe("FAILED");
-    const last = mJob.update.mock.calls.at(-1)![0].data;
+    const last = mJob.updateMany.mock.calls.at(-1)![0].data;
     expect(last.status).toBe("FAILED");
     expect(String(last.lastError)).toContain("发布链路异常");
     expect(String(last.lastError)).toContain("spawn 链路损坏");
@@ -290,5 +292,61 @@ describe("processJob 主链路", () => {
     expect((mSpawn.mock.calls[0][0] as string[])[0]).toBe("douyin_publish.py");
     const publishLogDetail = String(mLog.create.mock.calls[0][0].data.detail);
     expect(publishLogDetail).toContain("7350000000000000001");
+  });
+});
+
+describe("I-1 并发双跑防护 + M1 cancel 竞态（终态写 CAS）", () => {
+  it("I-1: PENDING→RUNNING CAS count=0（被并发触发/排期轮次抢占）→ 不 spawn，重读库返现态", async () => {
+    mJob.findUnique
+      .mockResolvedValueOnce(makeJob()) // processJob 初读
+      .mockResolvedValueOnce({ id: "job1", status: "RUNNING" }); // CAS 落空后重读现态
+    mJob.updateMany.mockResolvedValue({ count: 0 });
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const status = await processJob("job1");
+    spy.mockRestore();
+    expect(status).toBe("RUNNING");
+    expect(mSpawn).not.toHaveBeenCalled(); // 不 spawn 第二跑
+    expect(mLog.create).not.toHaveBeenCalled();
+  });
+
+  it("M1: 终态写（SUCCESS）CAS count=0（cancel 已抢先置 CANCELLED）→ 不覆盖、Variant 不置 PUBLISHED，返现态", async () => {
+    mJob.findUnique
+      .mockResolvedValueOnce(makeJob())
+      .mockResolvedValue({ id: "job1", status: "CANCELLED" });
+    mSpawn.mockImplementation((args: string[]) => {
+      if (args[1] === "plan") return Promise.resolve({ code: 0, stdout: "dry-run", stderr: "" });
+      if (args[1] === "publish")
+        return Promise.resolve({ code: 0, stdout: "✅ 发布成功，已跳转：https://creator.xiaohongshu.com/publish/success\n", stderr: "" });
+      return Promise.resolve({ code: 0, stdout: JSON.stringify({ loggedIn: true }), stderr: "" });
+    });
+    // PENDING→RUNNING 迁移成功；终态写被 cancel 抢占
+    mJob.updateMany.mockImplementation((args) => {
+      const where = (args as { where: { status?: unknown } }).where;
+      return Promise.resolve(where.status === "PENDING" ? { count: 1 } : { count: 0 });
+    });
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const status = await processJob("job1");
+    spy.mockRestore();
+    expect(status).toBe("CANCELLED");
+    expect(mVariant.update).not.toHaveBeenCalled(); // 不把已取消任务推 PUBLISHED
+  });
+
+  it("M1: markFailed 终态写 CAS count=0（cancel 已抢先）→ 不覆盖 CANCELLED，返现态", async () => {
+    mJob.findUnique
+      .mockResolvedValueOnce(makeJob())
+      .mockResolvedValue({ id: "job1", status: "CANCELLED" });
+    mSpawn.mockImplementation((args: string[]) => {
+      if (args[1] === "plan") return Promise.resolve({ code: 0, stdout: "dry-run", stderr: "" });
+      return Promise.resolve({ code: 3, stdout: "", stderr: "ERROR: 未登录\n" });
+    });
+    mJob.updateMany.mockImplementation((args) => {
+      const where = (args as { where: { status?: unknown } }).where;
+      return Promise.resolve(where.status === "PENDING" ? { count: 1 } : { count: 0 });
+    });
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const status = await processJob("job1");
+    spy.mockRestore();
+    expect(status).toBe("CANCELLED");
+    expect(mVariant.update).not.toHaveBeenCalled();
   });
 });

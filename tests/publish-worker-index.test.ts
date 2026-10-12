@@ -108,6 +108,23 @@ describe("POST /publish（裁决②：fire-and-forget 202）", () => {
     expect(res.statusCode).toBe(400);
     expect(mProcess).not.toHaveBeenCalled();
   });
+
+  it("I-1: 非 PENDING job（RUNNING / CANCELLED）→ 409「已被触发/进行中，勿重试」且不调 processJob", async () => {
+    for (const status of ["RUNNING", "CANCELLED"] as const) {
+      mJob.findUnique.mockResolvedValue({ id: "j1", status });
+      const res = fakeRes();
+      await handle(
+        fakeReq("POST", "/publish", JSON.stringify({ jobId: "j1" })) as unknown as IncomingMessage,
+        res as unknown as ServerResponse,
+      );
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      expect(body.ok).toBe(false);
+      expect(body.status).toBe(status);
+      expect(String(body.error)).toContain("已被触发/进行中");
+    }
+    expect(mProcess).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /jobs/:id（Task 7 轮询出状态）", () => {
