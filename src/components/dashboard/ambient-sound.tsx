@@ -50,6 +50,8 @@ export function AmbientSound() {
   const { scene } = useScene();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [volume, setVolume] = useState(0.3);
+  // 静音态与滑块音量分离：双击小喇叭只切静音，不改变滑块位置；再次双击恢复原音量
+  const [muted, setMuted] = useState(false);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupFallbackRef = useRef<(() => void) | null>(null);
@@ -58,7 +60,9 @@ export function AmbientSound() {
   // （React Compiler 会报 react-hooks/refs）；chat-room.tsx 的 atBottomRef 也是这个写法。
   useEffect(() => {
     volumeRef.current = volume;
-  }, [volume]);
+    // 静音时 audio 保持 0；取消静音恢复滑块音量（滑块本身没动过）
+    if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
+  }, [volume, muted]);
   // 记录「离开页面前是否在播放」，回到页面时据此决定是否恢复
   const wasPlayingRef = useRef(false);
 
@@ -131,12 +135,16 @@ export function AmbientSound() {
     };
   }, []);
 
-  // 音量变化即同步到 audio
+  // 音量变化即同步到 audio（由上方 effect 统一处理，这里只管 state）
   function changeVolume(v: number) {
     setVolume(v);
-    if (audioRef.current) {
-      audioRef.current.volume = v;
-    }
+  }
+
+  // 双击小喇叭：静音/恢复；静音时顺便收回展开的音量条
+  function handleDoubleClick() {
+    const next = !muted;
+    setMuted(next);
+    if (next) setOpen(false);
   }
 
   // ── 胶囊滑块拖拽逻辑 ──
@@ -202,7 +210,7 @@ export function AmbientSound() {
     };
   }, [open]);
 
-  const isSilent = volume === 0;
+  const isSilent = muted || volume === 0;
   const fillPercent = Math.round(volume * 100);
 
   return (
@@ -217,6 +225,8 @@ export function AmbientSound() {
         {/* 按钮区 */}
         <button
           onClick={toggleOpen}
+          onDoubleClick={handleDoubleClick}
+          title={muted ? "已静音 · 再次双击恢复音量" : "单击调节音量 · 双击静音"}
           className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-300 ${isSilent
               ? "text-white/40 hover:text-white/70 hover:bg-white/[0.08]"
               : "text-primary hover:bg-primary/[0.08]"

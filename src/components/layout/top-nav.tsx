@@ -31,7 +31,6 @@ import {
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { AmbientSound } from "@/components/dashboard/ambient-sound";
 import { ChatRoom } from "@/components/chatroom/chat-room";
-import { GithubLink } from "@/components/layout/github-link";
 import { useSceneCopy } from "@/context/scene-context";
 import { useOnboarding } from "@/components/onboarding/onboarding-provider";
 
@@ -134,7 +133,7 @@ export function TopNav({ user }: TopNavProps) {
                 <LogoutButton />
               </DropdownMenuContent>
             </DropdownMenu>
-            <GithubLink className="ml-1 mr-0.5" />
+            {/* 2026-09-30 隐藏「点亮 Star」入口（用户要求），组件保留 github-link.tsx */}
           </div>
 
           {/* 移动端：汉堡菜单 */}

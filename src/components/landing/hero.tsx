@@ -14,7 +14,6 @@ import {
 } from "@phosphor-icons/react";
 import ShinyText from "./ShinyText";
 import VariableProximity from "@/components/ui/variable-proximity";
-import { GithubLink } from "@/components/layout/github-link";
 
 const pulseItems = [
   { icon: CalendarCheck, value: "12 天", label: "连续打卡" },
@@ -43,7 +42,7 @@ export function Hero() {
             <span className="text-[15px] tracking-wide">Summer Checkin</span>
           </Link>
         <div className="flex items-center gap-3">
-          <GithubLink />
+          {/* 2026-09-30 隐藏「点亮 Star」入口（用户要求） */}
         </div>
       </nav>
 
