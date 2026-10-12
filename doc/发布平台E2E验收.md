@@ -51,7 +51,7 @@ UI 路径：`/publish`（内容页新建 + 媒体上传）→ `/publish/variants
 # ① 建 post（title/body 必填；先传媒体拿 path，mediaPaths 回填在 post 上）
 curl -s -X POST localhost:3000/api/publish/posts -H 'Content-Type: application/json' \
   -d '{"title":"<真实标题>","body":"<真实正文>","mediaPaths":[]}'        # → 200 {…postId, userId}
-curl -s -X POST localhost:3000/api/publish/media -F 'file=@./某图.png'    # → 200 {"path":"data/publish/media/<postId>/…"}
+curl -s -X POST localhost:3000/api/publish/media -F 'postId=<postId>' -F 'file=@./某图.png'    # → 200 {"path":"data/publish/media/<postId>/…"}（postId 取自 ① 建 Post 的响应；缺 → 400）
 curl -s -X PATCH localhost:3000/api/publish/posts/<postId> -H 'Content-Type: application/json' \
   -d '{"mediaPaths":["data/publish/media/<postId>/….png"]}'
 
@@ -85,8 +85,8 @@ curl -s -X POST localhost:3022/publish -H 'Content-Type: application/json' -d '{
 ### 2.4 结果确认
 
 ```bash
-curl -s localhost:3022/jobs/<jobId>
-# 预期：job.status = SUCCESS、lastError = null；variant.status = PUBLISHED
+curl -s localhost:3000/api/publish/jobs/<jobId>
+# 预期（API 代理层，含 variant；worker 端 GET /jobs/<jobId> 只回裸 job 行）：status = SUCCESS、lastError = null；variant.status = PUBLISHED
 curl -s 'localhost:3000/api/publish/logs?jobId=<jobId>'
 # 预期：3 条 Log 时间线——PLAN / PUBLISH / VERIFY（PUBLISH detail 含「✅ XHS 发布成功」读回证据，见「成功判据」）
 ```
@@ -144,10 +144,10 @@ worker spawn Easel 的判成功规则（`process-job.ts`，钉死不放宽）：
 
 ## 8. 回执（人工验收时填）
 
-| 平台 | Post 标题 / variantId / jobId | Job 终态 | Log PLAN/PUBLISH/VERIFY 各 1 条？ | 测试号确认作品（截图粘贴） | 弹短信墙？（Y/N，N=—） | 备注（踩坑/偏差） |
-|---|---|---|---|---|---|---|
-| 小红书 |  |  |  |  |  |  |
-| 抖音 |  |  |  |  |  |  |
-| GZH（预期行） |  | FAILED（预期，P2 官方 API 未接入） | 501/无 PUBLISH Log（预期） | —（不发） | — |  |
+| 平台 | Post 标题 / variantId / jobId | Job 终态 | 脚本退出码/标记（对照 §5 语义表填） | Log PLAN/PUBLISH/VERIFY 各 1 条？ | 测试号确认作品（截图粘贴） | 弹短信墙？（Y/N，N=—） | 备注（踩坑/偏差） |
+|---|---|---|---|---|---|---|---|
+| 小红书 |  |  |  |  |  |  |  |
+| 抖音 |  |  |  |  |  |  |  |
+| GZH（预期行） |  | FAILED（预期，P2 官方 API 未接入） | —（501，未触脚本） | 501/无 PUBLISH Log（预期） | —（不发） | — |  |
 
 验收完成标准：两行「小红书」「抖音」Job 终态 = SUCCESS、Log 三阶段齐全、测试号确认作品；GZH 行符合预期即通过。任一平台失败：把 lastError + Log detail 原文粘进备注列，不回改判 SUCCESS。
