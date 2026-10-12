@@ -1,5 +1,5 @@
 // 发布 worker 入口（Task 4）：node:http :3022（PUBLISH_WORKER_PORT 可覆盖）
-// 路由（Task 6 API 层 fetch 这些端点；Task 5 排期器后续挂进本文件）：
+// 路由（Task 6 API 层 fetch 这些端点）：
 //   GET  /health                → {ok:true, platform:"publish-worker"}
 //   GET  /login?platform=xhs    → 后台启 Easel login（--qr-out/--status-file 约定路径），返 {qrPath,statusFile}
 //   GET  /login-status?platform → 读 statusFile JSON 透传（不存在→{status:"pending"}）
@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prisma } from "../db";
 import { contentArgs, easelScriptFor, processJob, writePublishLog } from "./process-job";
+import { startScheduler } from "./scheduler";
 import { spawnEasel } from "./spawn";
 import { LOGIN_SCRIPTS, QRCODE_DIR, loginPaths, readLoginStatus, type LoginPlatform } from "./status";
 
@@ -193,7 +194,9 @@ const server = createServer((req, res) => {
 
 // 仅作为主进程启动时监听（import 本模块做路由单测不产生 listen 副作用）
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // 排期器：60s 扫 due PENDING，只自动发 APPROVED；timer.unref() 不阻止进程退出（worker kill 干净）
+  startScheduler(prisma);
   server.listen(PORT, () => {
-    console.log(`[publish-worker] 发布 worker 已启动 :${PORT}`);
+    console.log(`[publish-worker] 发布 worker 已启动 :${PORT}（排期器每 60s 扫描，仅自动发 APPROVED）`);
   });
 }

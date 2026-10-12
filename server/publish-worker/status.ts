@@ -26,6 +26,11 @@ export function loginPaths(platform: LoginPlatform): { qrPath: string; statusFil
 /** 抖音发布状态文件（douyin publish 的 --status-file，I1 短信墙轮询；JSON 结构=login_state：{state,message,qr,ts}） */
 export const DOUYIN_PUBLISH_STATUS_FILE = path.join(QRCODE_DIR, "douyin-publish.json");
 
+/** 抖音发布状态文件绝对路径（spawn cwd=仓库根；publish 前清理旧残留 + 轮询读取用） */
+export function douyinPublishStatusPath(): string {
+  return path.join(REPO_ROOT, DOUYIN_PUBLISH_STATUS_FILE);
+}
+
 /**
  * 读抖音发布状态文件（Easel douyin publish --status-file 落盘）。容错：不存在/解析失败 → {}
  * 调用方按 .state/.message 判断（state=sms_required 或 error+「短信验证」message=短信墙）

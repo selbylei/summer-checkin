@@ -2,6 +2,9 @@
 // 控制器裁决：测试②「写入 2 条 Log」= PUBLISH 段 1 条 + VERIFY 段 1 条
 // R1 修复：I1 抖音短信墙 → FAILED + Log(stage=PUBLISH, detail 含「需人工验证码」)
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 vi.mock("../server/publish-worker/spawn", () => ({
   spawnEasel: vi.fn(),
@@ -226,6 +229,34 @@ describe("processJob 主链路", () => {
     expect(status).toBe("FAILED");
     expect(mLog.create).not.toHaveBeenCalled();
     expect(String(mJob.update.mock.calls.at(-1)![0].data.lastError)).not.toContain("需人工验证码");
+  });
+
+  it("I1d 残留小修：DOUYIN publish 前删掉旧 douyin-publish.json（上轮「短信验证」终态不残留误判）", async () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const statusFile = path.join(root, "data/publish/qrcode/douyin-publish.json");
+    const parentExisted = await fs.stat(path.join(root, "data")).then(() => true).catch(() => false);
+    // 残留上轮终态文件
+    await fs.mkdir(path.dirname(statusFile), { recursive: true });
+    await fs.writeFile(statusFile, JSON.stringify({ state: "error", message: "发布短信验证超时未完成" }));
+    mJob.findUnique.mockResolvedValue(makeJob({ platform: "DOUYIN" }));
+    mStatusFile.mockResolvedValue({});
+    mSpawn.mockImplementation((args: string[]) => {
+      if (args[1] === "plan") return Promise.resolve({ code: 0, stdout: "dry-run", stderr: "" });
+      if (args[1] === "publish")
+        return Promise.resolve({
+          code: 0,
+          stdout: "✅ 抖音发布成功（读回核验：7350000000000000002）\n",
+          stderr: "",
+        });
+      return Promise.resolve({ code: 0, stdout: JSON.stringify({ loggedIn: true }), stderr: "" });
+    });
+    const status = await processJob("job1");
+    expect(status).toBe("SUCCESS");
+    // publish 前残留文件已被清掉（未加 unlink 修复时 stat 会成功 → 本用例红）
+    await expect(fs.stat(statusFile)).rejects.toThrow(/ENOENT/);
+    // 清理测试数据（仅清不存在的目录链，不碰真实 dev 数据）
+    await fs.rm(statusFile, { force: true });
+    if (!parentExisted) await fs.rm(path.join(root, "data"), { recursive: true, force: true });
   });
 
   it("裁决② 主链路意外异常（publish spawn reject）→ 落 lastError 转 FAILED，不外抛（fire-and-forget 路由 await 不到）", async () => {

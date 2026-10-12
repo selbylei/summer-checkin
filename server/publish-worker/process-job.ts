@@ -2,9 +2,10 @@
 // 成功判据（Global Constraints）：publish 脚本退出 0 且 stdout 含读回对账 success 标记——
 // 标记取自 Easel 脚本源：xhs「✅ 发布成功」、douyin「✅ 抖音发布成功（读回核验：…）」，公共子串「发布成功」
 import type { JobStatus, LogStage, Platform } from "@prisma-generated/enums";
+import { promises as fs } from "node:fs";
 import { prisma } from "../db";
 import { spawnEasel } from "./spawn";
-import { DOUYIN_PUBLISH_STATUS_FILE, readDouyinPublishStatus } from "./status";
+import { DOUYIN_PUBLISH_STATUS_FILE, douyinPublishStatusPath, readDouyinPublishStatus } from "./status";
 
 /** Easel stdout 读回成功标记（xhs/douyin publish 成功路径公共子串；dry-run 输出只含「成功校验」不会误中） */
 export const PUBLISH_SUCCESS_MARKER = "发布成功";
@@ -96,7 +97,11 @@ async function runJob(
   // I1 抖音短信墙：douyin publish 附加 --status-file（douyin add_common 专属参数，供短信墙轮询）；
   // xhs publish 无此参数（argparse 源），绝不传
   const publishArgs = [script, "publish", "--exec", ...content];
-  if (variant.platform === "DOUYIN") publishArgs.push("--status-file", DOUYIN_PUBLISH_STATUS_FILE);
+  if (variant.platform === "DOUYIN") {
+    publishArgs.push("--status-file", DOUYIN_PUBLISH_STATUS_FILE);
+    // I1 残留小修：发布前清掉旧的 douyin-publish.json（上轮「短信验证」终态残留会被 isSmsWallStatus 误命中）；force=不存在不报错
+    await fs.rm(douyinPublishStatusPath(), { force: true });
+  }
   const pub = await spawnEasel(publishArgs);
   if (pub.code !== 0) {
     // I1：抖音短信墙 → 任务 FAILED、Log(stage=PUBLISH) 提示「需人工验证码」（不静默吞掉）
