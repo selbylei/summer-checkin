@@ -104,4 +104,9 @@ txt文件/
 /output/pdf/
 /tmp/pdfs/
 
+# 发布平台（worker 落盘/对账产物，不提交）
+data/publish/
+outputs/_login/
+server/publish/easel/__pycache__/
+
 todo.md
