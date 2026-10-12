@@ -5,7 +5,7 @@
  * 依次以 child_process 跑：
  *   1. xhs_publish.py    selftest   （离线自检）
  *   2. douyin_publish.py selftest   （离线自检）
- *   3. web_publisher.py  selftest   （离线自检；若某版本无 selftest 子命令则回退 platforms）
+ *   3. web_publisher.py  selftest   （离线自检；若 selftest 子命令不存在即 argparse 退出码 2，则回退 platforms）
  *   4. xhs_publish.py    plan       （dry-run 缺省，只打印发布步骤，不触网不发布）
  *
  * 全部离线，不触网、不真正发布。任一脚本非 0 退出 → 打印失败项 + 退出码，process.exit(1)。
@@ -31,49 +31,40 @@ const steps = [
   { name: 'xhs plan dry-run', rel: 'xhs_publish.py', args: ['plan', '--title', '测试', '--content', '测试'] },
 ];
 
-// 用 --help 探测某脚本支持的子命令，用于 web_publisher selftest→platforms 的兜底判定。
-function subcommands(rel) {
-  try {
-    const out = execFileSync(PYTHON, [script(rel), '--help'], {
-      stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8',
-    });
-    // 在 --help 输出里找子命令名（argparse 的可选子命令段落）
-    return ['selftest', 'platforms'].filter((c) => new RegExp(`(^|\\s)${c}(\\s|$)`, 'm').test(out));
-  } catch {
-    return ['selftest'];
-  }
-}
-
 function runStep(name, rel, args) {
-  const cmd = [script(rel), ...args];
   process.stdout.write(`\n=== ${name} :: ${PYTHON} ${rel} ${args.join(' ')}\n`);
   try {
-    const out = execFileSync(PYTHON, cmd, {
+    const out = execFileSync(PYTHON, [script(rel), ...args], {
       stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8',
     });
     if (out) process.stdout.write(out.trimEnd() + '\n');
-    return null;
+    return { ok: true, code: 0 };
   } catch (err) {
     if (err.stdout) process.stderr.write(String(err.stdout));
     if (err.stderr) process.stderr.write(String(err.stderr));
-    if (err.status === undefined) return `无法执行 ${PYTHON}：${err.code || err.message}`;
-    return `失败（退出码 ${err.status}）`;
+    if (err.status === undefined) {
+      return { ok: false, code: undefined, errMsg: `无法执行 ${PYTHON}：${err.code || err.message}` };
+    }
+    return { ok: false, code: err.status };
   }
 }
 
 let failed = 0;
 for (const step of steps) {
   let args = step.args;
-  // 仅 web_publisher：若其当前版本无 selftest 子命令，则回退到 platforms（brief 兜底规则）
-  if (step.rel === 'web_publisher.py' && !subcommands(step.rel).includes('selftest')) {
+  let res = runStep(step.name, step.rel, args);
+  // 仅 web_publisher：selftest 若因「子命令不存在」失败（argparse 退出码 2 = invalid choice），
+  // 则回退 platforms（brief 兜底规则）。真实自测失败为退出码 1，绝不触发回退，避免误吞真实错误。
+  if (step.rel === 'web_publisher.py' && !res.ok && res.code === 2) {
     args = ['platforms'];
+    res = runStep(`${step.name}（selftest 缺失 → 回退 platforms）`, step.rel, args);
   }
-  const failure = runStep(step.name, step.rel, args);
-  if (failure) {
+  if (!res.ok) {
     failed += 1;
-    console.error(`❌ ${step.name} ${failure}`);
+    const why = res.errMsg || `失败（退出码 ${res.code}）`;
+    console.error(`❌ ${step.name} [实际执行: ${args.join(' ')}] ${why}`);
   } else {
-    process.stdout.write(`✅ ${step.name} 通过\n`);
+    process.stdout.write(`✅ ${step.name} [实际执行: ${args.join(' ')}] 通过\n`);
   }
 }
 
