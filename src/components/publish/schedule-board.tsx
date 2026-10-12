@@ -156,7 +156,8 @@ export function ScheduleBoard() {
 
       <div className="flex flex-col gap-3">
         {(jobs ?? []).map((job) => {
-          const unapproved = job.variant.status !== "APPROVED";
+          // 未批准 = variant 仍 DRAFT；PUBLISHED=已批准放行（worker 发布成功后置 PUBLISHED），SUCCESS 行不得置灰
+          const unapproved = job.variant.status === "DRAFT";
           const isSmsWall = job.status === "FAILED" && (job.lastError ?? "").includes("短信验证码");
           const canReschedule = job.status === "PENDING";
           const canCancel = job.status === "PENDING" || job.status === "RUNNING";

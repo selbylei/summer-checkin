@@ -201,7 +201,9 @@ function VariantEditor({
         body: JSON.stringify({ status: "APPROVED" }),
       });
       if (!approved.ok) {
-        setPublishNote(approved.errors.length ? approved.errors.join("；") : approved.error);
+        // 422 红字逐条（与格式校验同一逐条渲染口径），非 422 走 error 单行
+        setCheckErrors(approved.errors);
+        setCheckNote(approved.errors.length === 0 ? approved.error : "");
         return;
       }
       // 2) 建排期任务（立刻执行）

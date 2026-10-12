@@ -228,7 +228,18 @@ function PlatformAccountCard({
             <QrCode className="size-3.5" weight="duotone" aria-hidden />
             {live ? "P1 只存不消费，P2 起填入 pi 会话" : GZH_HINT}
           </span>
-          <Button type="submit" variant="secondary" size="sm" disabled={saving || !values.handle.trim()}>
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={
+              saving ||
+              !values.handle.trim() ||
+              !values.positioning.trim() ||
+              !values.style.trim() ||
+              !values.tone.trim()
+            }
+          >
             {saving ? "保存中..." : "保存画像"}
           </Button>
         </div>

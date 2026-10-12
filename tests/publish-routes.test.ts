@@ -13,7 +13,7 @@ vi.mock("@/lib/prisma", () => ({
     post: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     postVariant: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     publishJob: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
-    accountProfile: { findMany: vi.fn(), create: vi.fn() },
+    accountProfile: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     publishLog: { findMany: vi.fn() },
   },
 }));
@@ -24,6 +24,7 @@ import { prisma } from "@/lib/prisma";
 import { POST as createPost } from "@/app/api/publish/posts/route";
 import { POST as createVariant } from "@/app/api/publish/variants/route";
 import { POST as createJob } from "@/app/api/publish/jobs/route";
+import { POST as saveAccount } from "@/app/api/publish/accounts/route";
 import { GET as loginGet } from "@/app/api/publish/login/route";
 
 const USER = { id: "u1", name: "tester", email: "t@example.com" };
@@ -32,6 +33,7 @@ const mUser = getCurrentUser as unknown as Mock;
 const mPost = prisma.post as unknown as { findFirst: Mock; create: Mock; update: Mock };
 const mVariant = prisma.postVariant as unknown as { findFirst: Mock; create: Mock; update: Mock };
 const mJob = prisma.publishJob as unknown as { findFirst: Mock; findMany: Mock; create: Mock; update: Mock };
+const mAccount = prisma.accountProfile as unknown as { findMany: Mock; findFirst: Mock; create: Mock; update: Mock };
 
 
 function jsonReq(url: string, body: unknown): NextRequest {
@@ -145,6 +147,62 @@ describe("publish routes（薄代理契约）", () => {
         })
       )
     ).rejects.toEqual({ code: "P2003" });
+  });
+
+  it("I-2：POST /accounts 已有画像（userId+platform）→ update 不新增行，响应 {id, saved:'updated'}", async () => {
+    mUser.mockResolvedValue(USER);
+    mAccount.findFirst.mockClear();
+    mAccount.create.mockClear();
+    mAccount.update.mockClear();
+    mAccount.findFirst.mockResolvedValue({ id: "acc-1", userId: "u1", platform: "XHS" });
+    mAccount.update.mockResolvedValue({ id: "acc-1", userId: "u1", platform: "XHS" });
+    const res = await saveAccount(
+      jsonReq("http://localhost/api/publish/accounts", {
+        platform: "xhs",
+        handle: "@summer",
+        positioning: "夏日打卡",
+        style: "生活记录",
+        tone: "轻松",
+        constraints: "不发广告",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "acc-1", saved: "updated" });
+    // 查找口径：按 userId+platform 取最早一行（该表无 createdAt，cuid id 时间序 asc）
+    expect(mAccount.findFirst).toHaveBeenCalledWith({
+      where: { userId: "u1", platform: "XHS" },
+      take: 1,
+      orderBy: { id: "asc" },
+    });
+    expect(mAccount.create).not.toHaveBeenCalled();
+    expect(mAccount.update.mock.calls[0][0]).toMatchObject({
+      where: { id: "acc-1" },
+      data: { constraints: "不发广告" },
+    });
+  });
+
+  it("I-2：POST /accounts 无画像 → create 新建一行，响应 {id, saved:'created'}", async () => {
+    mUser.mockResolvedValue(USER);
+    mAccount.findFirst.mockClear();
+    mAccount.create.mockClear();
+    mAccount.update.mockClear();
+    mAccount.findFirst.mockResolvedValue(null);
+    mAccount.create.mockResolvedValue({ id: "acc-new", userId: "u1", platform: "DOUYIN" });
+    const res = await saveAccount(
+      jsonReq("http://localhost/api/publish/accounts", {
+        platform: "DOUYIN",
+        handle: "@summer",
+        positioning: "夏日打卡",
+        style: "生活记录",
+        tone: "轻松",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "acc-new", saved: "created" });
+    expect(mAccount.update).not.toHaveBeenCalled();
+    expect(mAccount.create.mock.calls[0][0]).toMatchObject({
+      data: { userId: "u1", platform: "DOUYIN", handle: "@summer" },
+    });
   });
 
   it("502：worker 未启动（fetch 抛 ECONNREFUSED）时 GET /api/publish/login 返 {error:'publish worker 未启动'}", async () => {

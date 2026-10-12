@@ -21,18 +21,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // upsert（按 userId+platform，最早一行）：重复保存只 update 不新增行；schema 不加唯一约束（控制器裁决）。
+  // 该表无 createdAt 列，orderBy id asc：cuid 时间单调序，等效取最早一行
+  const existing = await prisma.accountProfile.findFirst({
+    where: { userId: user.id, platform },
+    take: 1,
+    orderBy: { id: "asc" },
+  });
+  const data = {
+    handle: fields.handle,
+    positioning: fields.positioning,
+    style: fields.style,
+    tone: fields.tone,
+    ...(typeof body.constraints === "string" ? { constraints: body.constraints } : {}),
+  };
+  if (existing) {
+    const account = await prisma.accountProfile.update({
+      where: { id: existing.id },
+      data,
+    });
+    return NextResponse.json({ id: account.id, saved: "updated" });
+  }
   const account = await prisma.accountProfile.create({
     data: {
       platform,
-      handle: fields.handle,
-      positioning: fields.positioning,
-      style: fields.style,
-      tone: fields.tone,
+      ...data,
       userId: user.id, // user 域隔离（缺口裁决①：AccountProfile 挂 userId）
-      ...(typeof body.constraints === "string" ? { constraints: body.constraints } : {}),
     },
   });
-  return NextResponse.json(account);
+  return NextResponse.json({ id: account.id, saved: "created" });
 }
 
 // GET /api/publish/accounts：当前 user 的账号画像列表
