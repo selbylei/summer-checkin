@@ -303,7 +303,7 @@ function VariantEditor({
       )}
 
       <div className="mt-auto flex flex-col gap-2 border-t border-white/8 pt-3">
-        {(!published && variant.status === "DRAFT") || (variant.status === "APPROVED" && variant.plan != null) ? (
+        {variant.status !== "PUBLISHED" ? (
           <PlanCard
             variantId={variant.id}
             initialPlanJson={variant.plan}
