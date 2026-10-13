@@ -122,7 +122,7 @@ export function PlanCard({
       {plan && !error && (
         <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
           <p className="text-[11px] font-medium text-primary">
-            AI 发布方案{!canAdopt ? "（已批准/已发布，只读展示；可撤销后重新选择）" : "（采纳后仍需人工批准发布）"}
+            AI 发布方案{!canAdopt ? "（已发布，只读展示；可撤销后重新选择）" : "（采纳后仍需人工批准发布；已批准变体采纳会自动回到未批准重走批准）"}
           </p>
           <dl className="mt-2 grid gap-1.5 text-xs text-foreground/85">
             <div className="flex gap-2">

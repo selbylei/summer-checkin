@@ -137,13 +137,15 @@ function VariantEditor({
     if (busy) return;
     setBusy(true);
     setPlanNote("");
+    const wasApproved = variant.status === "APPROVED";
     try {
       // 采纳 = 写入选中标题 + 方案标签；bodyOutline 只进提示条不动正文（人工拍板）
       setTitle(pickedTitle);
       setTagsText(plan.tags.join(", "));
+      // 已批准变体改内容 = 回到 DRAFT 重新走批准闸（内容变了，原批准失效）；PATCH 路由 status 白名单含 DRAFT
       const r = await publishFetch(`/api/publish/variants/${variant.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ title: pickedTitle, tags: plan.tags }),
+        body: JSON.stringify({ title: pickedTitle, tags: plan.tags, ...(wasApproved ? { status: "DRAFT" } : {}) }),
       });
       if (!r.ok) {
         setCheckErrors(r.errors);
@@ -153,7 +155,7 @@ function VariantEditor({
       }
       setDirty(false);
       setPlanNote(plan.bodyOutline ? `AI 方案正文骨架（参考，未覆盖正文）：${plan.bodyOutline}` : "");
-      toast.success("方案已采纳（标题/标签），核对后「批准并发布」");
+      toast.success(wasApproved ? "方案已采纳（内容变更→已回到未批准，需重新批准并发布）" : "方案已采纳（标题/标签），核对后「批准并发布」");
     } finally {
       setBusy(false);
     }
@@ -307,7 +309,7 @@ function VariantEditor({
           <PlanCard
             variantId={variant.id}
             initialPlanJson={variant.plan}
-            canAdopt={variant.status === "DRAFT"}
+            canAdopt={true}
             onAdopt={(plan, t) => void handleAdoptPlan(plan, t)}
             onChanged={() => router.refresh()}
           />
