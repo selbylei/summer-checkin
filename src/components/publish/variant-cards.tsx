@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, Play, Sparkle, Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { PlanButton, type PublishPlan } from "./plan-card";
+import { PlanCard, type PublishPlan } from "./plan-card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -303,9 +303,15 @@ function VariantEditor({
       )}
 
       <div className="mt-auto flex flex-col gap-2 border-t border-white/8 pt-3">
-        {!published && variant.status === "DRAFT" && (
-          <PlanButton variantId={variant.id} platform={platform} onAdopt={handleAdoptPlan} />
-        )}
+        {(!published && variant.status === "DRAFT") || (variant.status === "APPROVED" && variant.plan != null) ? (
+          <PlanCard
+            variantId={variant.id}
+            initialPlanJson={variant.plan}
+            canAdopt={variant.status === "DRAFT"}
+            onAdopt={(plan, t) => void handleAdoptPlan(plan, t)}
+            onChanged={() => router.refresh()}
+          />
+        ) : null}
         {planNote && (
           <p className="text-[11px] leading-5 text-primary/90" role="note">{planNote}</p>
         )}

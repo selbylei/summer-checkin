@@ -38,6 +38,7 @@ export default async function PublishVariantsPage() {
       tags: v.tags,
       coverPath: v.coverPath,
       status: v.status,
+      plan: v.plan ?? null,
       job: v.job
         ? {
             id: v.job.id,

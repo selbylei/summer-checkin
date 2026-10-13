@@ -509,6 +509,9 @@ model PostVariant {
   status      VariantStatus @default(DRAFT)
   // 字数/标签校验结果 JSON（Task 3 format-check 产出，校验不过→API 422 不落库）
   formatCheck String?
+  // AI 规划层方案 JSON（planner 产出：angle/format/titles/bodyOutline/tags/timeliness；
+  // 生成一次后持久化，重新生成需显式 force；置 null = 撤销方案）
+  plan      String?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   // 1:1 排期：改期=改 Job.scheduledAt，不重建（variantId @unique 在 PublishJob 侧）

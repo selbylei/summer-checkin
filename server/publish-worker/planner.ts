@@ -128,12 +128,23 @@ export function parsePlan(raw: string): PublishPlan {
   };
 }
 
-export async function planVariant(variantId: string): Promise<PublishPlan> {
+export async function planVariant(variantId: string, opts?: { force?: boolean }): Promise<{ plan: PublishPlan; cached: boolean }> {
   const variant = await prisma.postVariant.findUnique({
     where: { id: variantId },
     include: { post: true },
   });
   if (!variant) throw new Error("variant not found");
+
+  // 保留策略：方案生成一次后存 variant.plan，再次请求直接返缓存（不重跑模型）；
+  // force=true 才重新生成并覆盖；置 null = 撤销（API DELETE）
+  if (!opts?.force && variant.plan) {
+    try {
+      return { plan: JSON.parse(variant.plan) as PublishPlan, cached: true };
+    } catch {
+      // 存量脏 JSON：降级为重新生成
+    }
+  }
+
   // 画像：同平台同 user 的 AccountProfile（P1 只存不消费——规划层首次消费）
   const profile = await prisma.accountProfile.findFirst({
     where: { platform: variant.platform, userId: variant.post.userId },
@@ -149,5 +160,11 @@ export async function planVariant(variantId: string): Promise<PublishPlan> {
       : null,
   });
   const raw = await runPi(prompt);
-  return parsePlan(raw);
+  const plan = parsePlan(raw);
+  // 写回持久化（一次生成，后续不再跑模型）
+  await prisma.postVariant.update({
+    where: { id: variantId },
+    data: { plan: JSON.stringify(plan) },
+  });
+  return { plan, cached: false };
 }

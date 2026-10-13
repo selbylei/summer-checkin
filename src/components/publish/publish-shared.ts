@@ -66,6 +66,8 @@ export interface PublishVariantDto {
   coverPath: string | null;
   status: VariantStatus;
   job: { id: string; scheduledAt: string; status: JobStatus; lastError: string | null } | null;
+  /** AI 规划层方案 JSON（planner 产出，一次生成后保留；null=未生成/已撤销） */
+  plan?: string | null;
 }
 
 export interface PublishPostDto {

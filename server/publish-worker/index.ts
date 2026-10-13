@@ -89,10 +89,14 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
 
   // ---- POST 路由 ----
   if (method === "POST" && p === "/ai-plan") {
-    // 规划层（Easel 策划层对齐）：spawn pi headless 出发布方案 JSON；同步等待（上限 180s，前端 loading）
+    // 规划层（Easel 策划层对齐）：spawn pi headless 出发布方案 JSON；同步等待（上限 180s，前端 loading）。
+    // 保留策略：方案生成一次后存 variant.plan（cached 直返）；force=true 重新生成覆盖；DELETE /ai-plan 撤销置 null
     let variantId: string;
+    let force: boolean;
     try {
-      variantId = (JSON.parse((await readBody(req)) || "{}") as { variantId?: string }).variantId ?? "";
+      const body = JSON.parse((await readBody(req)) || "{}") as { variantId?: string; force?: boolean };
+      variantId = body.variantId ?? "";
+      force = body.force === true;
     } catch {
       json(res, 400, { ok: false, error: "JSON 解析失败" });
       return;
@@ -103,11 +107,32 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
     }
     try {
       const { planVariant } = await import("./planner");
-      const plan = await planVariant(variantId);
-      json(res, 200, { ok: true, plan });
+      const { plan, cached } = await planVariant(variantId, { force });
+      json(res, 200, { ok: true, plan, cached });
     } catch (e) {
       json(res, 502, { ok: false, error: `规划失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
     }
+    return;
+  }
+
+  if (method === "DELETE" && p === "/ai-plan") {
+    // 撤销方案：variant.plan 置 null（不影响已批准/已发布状态，仅清方案缓存）
+    let variantId: string;
+    try {
+      variantId = ((JSON.parse((await readBody(req)) || "{}") as { variantId?: string }).variantId ?? "");
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!variantId) {
+      json(res, 400, { ok: false, error: "variantId 参数缺失" });
+      return;
+    }
+    const deleted = await prisma.postVariant.updateMany({
+      where: { id: variantId, plan: { not: null } },
+      data: { plan: null },
+    });
+    json(res, deleted.count > 0 ? 200 : 204, deleted.count > 0 ? { ok: true } : { ok: true, note: "无已存方案" });
     return;
   }
 

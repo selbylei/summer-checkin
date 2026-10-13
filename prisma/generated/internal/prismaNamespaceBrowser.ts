@@ -448,7 +448,8 @@ export const PostVariantScalarFieldEnum = {
   tags: 'tags',
   coverPath: 'coverPath',
   status: 'status',
-  formatCheck: 'formatCheck'
+  formatCheck: 'formatCheck',
+  plan: 'plan'
 } as const
 
 export type PostVariantScalarFieldEnum = (typeof PostVariantScalarFieldEnum)[keyof typeof PostVariantScalarFieldEnum]
