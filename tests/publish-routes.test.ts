@@ -103,7 +103,8 @@ describe("publish routes（薄代理契约）", () => {
 
   it("409（并发兜底）：同 (postId,platform) 绕过 pre-check 后 create 撞 P2002 → 409，而非裸 500", async () => {
     mUser.mockResolvedValue(USER);
-    mPost.findFirst.mockResolvedValue({ id: "p1", userId: "u1", mediaPaths: [] });
+    // 1 图：过图片下限闸，让用例真正走到 create 撞 P2002
+    mPost.findFirst.mockResolvedValue({ id: "p1", userId: "u1", mediaPaths: ["data/publish/media/p1/a.jpg"] });
     mVariant.findFirst.mockResolvedValue(null); // 并发：pre-check 时还不存在
     mVariant.create.mockRejectedValueOnce({ code: "P2002" });
     const res = await createVariant(
@@ -134,7 +135,7 @@ describe("publish routes（薄代理契约）", () => {
 
   it("非 P2002 的 create 异常不被吞：FK 违约 P2003 需 rethrow（路由 500 路径），不降级为 409", async () => {
     mUser.mockResolvedValue(USER);
-    mPost.findFirst.mockResolvedValue({ id: "p1", userId: "u1", mediaPaths: [] });
+    mPost.findFirst.mockResolvedValue({ id: "p1", userId: "u1", mediaPaths: ["data/publish/media/p1/a.jpg"] });
     mVariant.findFirst.mockResolvedValue(null);
     mVariant.create.mockRejectedValueOnce({ code: "P2003" });
     await expect(

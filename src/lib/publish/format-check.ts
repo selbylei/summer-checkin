@@ -26,7 +26,8 @@ export interface FieldLimits {
   titleLen?: number;
   bodyLen?: number;
   tagCount?: number;
-  mediaCount?: number;
+  mediaCount?: number; // 图片上限
+  mediaMin?: number; // 图片下限（发布脚本硬门：无图直接 exit 1）
 }
 
 // 导出给 worker 规划层（planner.ts 把平台硬约束喂给 pi 模型）；纯数据无副作用
@@ -37,8 +38,9 @@ export const LIMITS: Record<Platform, FieldLimits> = {
     // 标签 5-10 个：platform-specs.md「标签 5-10 个，正文末尾 #话题」→ 上限 10
     tagCount: 10,
     // 图片 1-9 张：platform-specs.md「图文 1-9 张」；cross-platform-diff platform-traits.md「3-9 张竖版图片」
-    // 两处上限一致（9）
+    // 两处上限一致（9）；下限 1 = 发布脚本图文模式硬门
     mediaCount: 9,
+    mediaMin: 1,
     // 正文不设限：platform-specs.md 只给「300-800 字」建议区间，无硬上限
   },
   DOUYIN: {
@@ -48,7 +50,9 @@ export const LIMITS: Record<Platform, FieldLimits> = {
     bodyLen: 55,
     // 标签 3-5 个：platform-specs.md「标签 3-5 个，含 1-2 个热点/挑战话题」→ 上限 5
     tagCount: 5,
-    // 图片数不设限：Easel references 未给抖音图片数上限（主力形式为短视频）
+    // 图片数无上限：Easel references 未给抖音图片数上限（主力形式为短视频）；
+    // 下限 1 = douyin_publish.py 图文发布硬门「--images 至少一张图片」（无图直接 exit 1）
+    mediaMin: 1,
   },
   GZH: {
     // 主标题 ≤64 字：platform-specs.md「主标题 ≤64 字，双标题制造点击」
@@ -87,6 +91,13 @@ export function checkVariant(
   if (limits.mediaCount !== undefined && input.mediaCount > limits.mediaCount) {
     errors.push(
       `${platform} 图片数过多：${input.mediaCount} 张（上限 ${limits.mediaCount} 张）`
+    );
+  }
+
+  // 下限（发布脚本硬门：0 图内容会一路走到 publish 才被脚本拦，前移到入库闸）
+  if (limits.mediaMin !== undefined && input.mediaCount < limits.mediaMin) {
+    errors.push(
+      `${platform} 缺少图片：当前 ${input.mediaCount} 张（至少 ${limits.mediaMin} 张，图文发布脚本硬门）`
     );
   }
 

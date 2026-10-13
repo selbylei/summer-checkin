@@ -95,3 +95,24 @@ describe("checkVariant", () => {
     });
   });
 });
+
+describe("图片下限（发布脚本硬门前移）", () => {
+  it("DOUYIN 0 图 → 报缺少图片；1 图 → 通过", () => {
+    const bad = checkVariant("DOUYIN", { title: "t", body: "好", tags: [], mediaCount: 0 });
+    expect(bad.ok).toBe(false);
+    expect(bad.errors.join()).toContain("缺少图片");
+    const ok = checkVariant("DOUYIN", { title: "t", body: "好", tags: [], mediaCount: 1 });
+    expect(ok.ok).toBe(true);
+  });
+
+  it("XHS 0 图 → 报缺少图片（图文 1-9 张下限 1）", () => {
+    const bad = checkVariant("XHS", { title: "t", body: "好", tags: [], mediaCount: 0 });
+    expect(bad.ok).toBe(false);
+    expect(bad.errors.join()).toContain("缺少图片");
+  });
+
+  it("GZH 不设下限：0 图通过", () => {
+    const r = checkVariant("GZH", { title: "t", body: "正文", tags: [], mediaCount: 0 });
+    expect(r.ok).toBe(true);
+  });
+});
