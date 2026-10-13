@@ -54,10 +54,12 @@ export default async function PublishContentPage() {
           <h1 className="product-title">内容</h1>
           <p className="product-subtitle">正文与媒体统一存放，多平台适配与排期在适配页完成。</p>
         </div>
-        <Button variant="secondary" render={<Link href="/publish/variants" />}>
-          去适配
-          <ArrowUpRight className="h-4 w-4" weight="bold" />
-        </Button>
+        <Link href="/publish/variants" className="inline-flex">
+          <Button variant="secondary">
+            去适配
+            <ArrowUpRight className="h-4 w-4" weight="bold" />
+          </Button>
+        </Link>
       </header>
 
       <section className="product-metrics mt-7 grid-cols-1 sm:grid-cols-3" aria-label="内容总览">
