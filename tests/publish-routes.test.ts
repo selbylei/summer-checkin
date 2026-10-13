@@ -356,3 +356,42 @@ describe("Easel 对齐批次：hot / from-hot / from-doc / docs / plan-ai", () =
     expect(res.status).toBe(401);
   });
 });
+
+describe("jobs 终态复用重触发（方案变更/修复后重新排期）", () => {
+  it("FAILED 旧 job → 复用重触发：reset PENDING + 新 scheduledAt + 清 lastError，返回 {reused:true}", async () => {
+    mJob.update.mockClear();
+    mJob.create.mockClear();
+    mUser.mockResolvedValue(USER);
+    mVariant.findFirst.mockResolvedValue({ id: "v1", platform: "XHS", post: { userId: "u1" } });
+    mJob.findFirst.mockResolvedValue({ id: "j-old", variantId: "v1", status: "FAILED", lastError: "x", scheduledAt: new Date("2026-10-01") });
+    mJob.update.mockResolvedValue({ id: "j-old", variantId: "v1", status: "PENDING", scheduledAt: new Date("2026-10-13"), lastError: null });
+    const res = await createJob(jsonReq("http://x/api/publish/jobs", { variantId: "v1", scheduledAt: "2026-10-13T00:00:00Z" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: "j-old", reused: true, status: "PENDING" });
+    expect(mJob.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "PENDING", lastError: null }) }));
+    expect(mJob.create).not.toHaveBeenCalled();
+  });
+
+  it("CANCELLED 旧 job → 同样复用重触发", async () => {
+    mJob.update.mockClear();
+    mUser.mockResolvedValue(USER);
+    mVariant.findFirst.mockResolvedValue({ id: "v1", platform: "XHS", post: { userId: "u1" } });
+    mJob.findFirst.mockResolvedValue({ id: "j2", variantId: "v1", status: "CANCELLED", lastError: null, scheduledAt: new Date("2026-10-01") });
+    mJob.update.mockResolvedValue({ id: "j2", status: "PENDING", lastError: null });
+    const res = await createJob(jsonReq("http://x/api/publish/jobs", { variantId: "v1", scheduledAt: "2026-10-14T00:00:00Z" }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).reused).toBe(true);
+  });
+
+  it("PENDING/SUCCESS 旧 job 仍 409（不可用 POST 重触发，改期走 PATCH）", async () => {
+    mJob.update.mockClear();
+    mUser.mockResolvedValue(USER);
+    mVariant.findFirst.mockResolvedValue({ id: "v1", platform: "XHS", post: { userId: "u1" } });
+    for (const status of ["PENDING", "SUCCESS"] as const) {
+      mJob.findFirst.mockResolvedValue({ id: "j3", variantId: "v1", status, lastError: null, scheduledAt: new Date() });
+      const res = await createJob(jsonReq("http://x/api/publish/jobs", { variantId: "v1", scheduledAt: "2026-10-15T00:00:00Z" }));
+      expect(res.status).toBe(409);
+    }
+    expect(mJob.update).not.toHaveBeenCalled();
+  });
+});

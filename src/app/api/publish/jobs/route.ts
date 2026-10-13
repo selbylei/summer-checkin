@@ -3,8 +3,9 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/publish/jobs：建排期任务（Variant 1:1 Job，variantId @unique）。
-// 同 variant 已有 PENDING→409；已有终态/运行态 job 同样 409（1:1 约束下不允许重建，
-// 改期走 PATCH /jobs/:id，裁决①：终态/运行态改期→409）。
+// 同 variant 已有 PENDING/RUNNING→409；已有**终态**（FAILED/CANCELLED）job = 复用重触发：
+// 重置为 PENDING + 新 scheduledAt + 清 lastError（1:1 不变量不变，解决「改方案后重发被 409 卡死」）；
+// SUCCESS job 仍 409（已发布成功的内容重发需明确重新排期，走 PATCH 改期路径另议）。
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,12 +26,20 @@ export async function POST(req: NextRequest) {
 
   const existing = await prisma.publishJob.findFirst({ where: { variantId } });
   if (existing) {
+    if (existing.status === "FAILED" || existing.status === "CANCELLED") {
+      // 终态 job 复用重触发（方案变更/修复后重新排期）：重置 PENDING，保留 job 行（1:1 不变）
+      const reused = await prisma.publishJob.update({
+        where: { id: existing.id },
+        data: { status: "PENDING", scheduledAt, lastError: null },
+      });
+      return NextResponse.json({ ...reused, reused: true });
+    }
     return NextResponse.json(
       {
         error:
           existing.status === "PENDING"
             ? "该 variant 已有待发布任务（PENDING）"
-            : `该 variant 已有任务（${existing.status}），不可重建——改期/取消走 PATCH /api/publish/jobs/${existing.id}`,
+            : `该 variant 已有任务（${existing.status}），不可重建——改期走 PATCH /api/publish/jobs/${existing.id}`,
       },
       { status: 409 }
     );
