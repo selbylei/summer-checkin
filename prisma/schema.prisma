@@ -442,7 +442,7 @@ model Announcement {
   @@map("announcement")
 }
 
-// ── 发布平台 P1（设计稿 doc/发布平台设计.md §3；PostMetric 属 P3 不建） ──
+// ── 发布平台 P1（设计稿 docs/发布平台设计.md §3；PostMetric 属 P3 不建） ──
 
 /// 发布目标平台。GZH=公众号、DOUYIN=抖音、XHS=小红书（sidecar/worker 按此分发脚本）
 enum Platform {

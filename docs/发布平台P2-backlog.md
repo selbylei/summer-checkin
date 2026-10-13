@@ -17,9 +17,14 @@
 11. **⑦ UI 类**：a 轮询切 `/jobs/:id`（现全量 GET /jobs）；b 批准原子性提示文案；c「编辑中」metric 口径（FAILED 篇计入）；d 空 constraints 无法清空（upsert 传 `constraints:""` 或 null 语义）
 
 ## B. 终审注记（P2 观察项，不阻塞）
-- 真实 E2E（§2 小红书 / §3 抖音）未执行——人工既定步骤，测试号就绪后按 `doc/发布平台E2E验收.md` 走；**截图不回 commit**（文档已引导粘贴进回执表，P2/验收 SOP 钉死不回仓）
+- 真实 E2E（§2 小红书 / §3 抖音）未执行——人工既定步骤，测试号就绪后按 `docs/发布平台E2E验收.md` 走；**截图不回 commit**（文档已引导粘贴进回执表，P2/验收 SOP 钉死不回仓）
 - P1 plan 文本「3 enum」笔误（实交 5 enum）——历史工件，P2 文档清理时勘误
 - PostVariant 冗余 `@@index([postId])`——随下次 schema 迁移删除
+
+## E. 并发/状态机残余（与 I-1 同族，终审复审 P2 注记）
+12. **cancel 反向窗口**：cancel 裸 update 可能覆盖刚写的终态（SUCCESS/FAILED 已有 RUNNING 前置 CAS，cancel 侧未对称）；修法：cancel 同样 updateMany CAS（where status in PENDING/RUNNING）
+13. **worker 重启后 RUNNING 僵死 job 无回收**：启动时将 RUNNING 归置（→PENDING 重排或 FAILED「worker 重启中断」）
+14. **scheduler inFlight 对永不 settle 的 tick 无超时复位**（DB 挂起病态）——记录观察项
 
 ## C. 设计分期备忘（非缺陷）
 - GZH 公众号官方 API 发布器（P1 拍板收口 2 平台，GZH 变体可建可批、发布 FAILED「P2 官方 API 未接入」）

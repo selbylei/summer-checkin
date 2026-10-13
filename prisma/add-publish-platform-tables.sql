@@ -1,4 +1,4 @@
--- 发布平台 P1：5 张新表 + 5 个枚举（与设计稿 doc/发布平台设计.md §3 对应，字段与 prisma/schema.prisma 逐字段一致）
+-- 发布平台 P1：5 张新表 + 5 个枚举（与设计稿 docs/发布平台设计.md §3 对应，字段与 prisma/schema.prisma 逐字段一致）
 -- PostMetric 属 P3，不在本脚本内。
 -- 应用方式：psql "$DATABASE_URL" -f prisma/add-publish-platform-tables.sql
 -- 随后 npx prisma db push（应为无变更）+ npx prisma generate

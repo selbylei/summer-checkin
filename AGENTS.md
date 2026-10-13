@@ -8,4 +8,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # 工作流
 
-记忆同步：本项目启用 project-memory skill（主快照 `doc/项目记忆.md` + 按日增量 `doc/记忆增量/`；口令「记忆:保存/合并/恢复」「提交推送+记忆」，自动恢复见 skill）
+记忆同步：本项目启用 project-memory skill（主快照 `docs/项目记忆.md` + 按日增量 `docs/记忆增量/`；口令「记忆:保存/合并/恢复」「提交推送+记忆」，自动恢复见 skill）
