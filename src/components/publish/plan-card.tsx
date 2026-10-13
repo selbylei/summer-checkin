@@ -77,8 +77,9 @@ export function PlanCard({
   async function clearPlan() {
     setClearing(true);
     try {
-      const r = await publishFetch<{ cleared?: boolean }>("/api/publish/plan-ai", {
-        method: "DELETE",
+      // POST 撤销（DELETE 请求走 better-auth 中间件会 307 到 /login，拿不到 JSON）
+      const r = await publishFetch<{ cleared?: boolean; error?: string }>("/api/publish/plan-ai/clear", {
+        method: "POST",
         body: JSON.stringify({ variantId }),
       });
       if (!r.ok) {

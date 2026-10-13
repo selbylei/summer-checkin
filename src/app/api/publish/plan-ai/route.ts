@@ -34,26 +34,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "publish worker 未启动" }, { status: 502 });
   }
 }
-
-// DELETE /api/publish/plan-ai {variantId}：撤销方案——variant.plan 置 null（不影响已批准/已发布状态，仅清方案缓存）。
-// 撤销后可重新「生成方案」重选。
-export async function DELETE(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = await req.json().catch(() => ({} as Record<string, unknown>));
-  const variantId = typeof body.variantId === "string" ? body.variantId : "";
-  if (!variantId) return NextResponse.json({ error: "variantId 必填（JSON body）" }, { status: 400 });
-
-  const variant = await prisma.postVariant.findFirst({
-    where: { id: variantId, post: { userId: user.id } },
-    select: { id: true, plan: true },
-  });
-  if (!variant) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  if (variant.plan === null) {
-    return NextResponse.json({ variantId, plan: null, cleared: false });
-  }
-  await prisma.postVariant.update({ where: { id: variantId }, data: { plan: null } });
-  return NextResponse.json({ variantId, plan: null, cleared: true });
-}
