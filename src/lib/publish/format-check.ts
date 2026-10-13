@@ -15,6 +15,10 @@ export interface VariantInput {
   body: string;
   tags: string[];
   mediaCount: number;
+  /** 媒体扩展名列表（小写，如 ["mp4","png"]）；VIDEO 形式校验用，缺省 [] 不校验扩展名 */
+  mediaExts?: string[];
+  /** 内容形式（缺省 IMAGE_TEXT）：VIDEO 时跳图片下限、要求 ≥1 个视频文件 */
+  format?: "IMAGE_TEXT" | "VIDEO";
 }
 
 export interface VariantCheckResult {
@@ -95,10 +99,19 @@ export function checkVariant(
   }
 
   // 下限（发布脚本硬门：0 图内容会一路走到 publish 才被脚本拦，前移到入库闸）
-  if (limits.mediaMin !== undefined && input.mediaCount < limits.mediaMin) {
+  // VIDEO 形式不要图，要视频——按形式分路，图片下限只管图文
+  const isVideo = input.format === "VIDEO";
+  if (!isVideo && limits.mediaMin !== undefined && input.mediaCount < limits.mediaMin) {
     errors.push(
       `${platform} 缺少图片：当前 ${input.mediaCount} 张（至少 ${limits.mediaMin} 张，图文发布脚本硬门）`
     );
+  }
+  if (isVideo) {
+    const videoExts = ["mp4", "mov", "webm", "mkv"];
+    const hasVideo = (input.mediaExts ?? []).some((e) => videoExts.includes(e));
+    if (!hasVideo) {
+      errors.push(`${platform} 视频形式缺少视频文件（需 ≥1 个 mp4/mov 媒体）`);
+    }
   }
 
   return { ok: errors.length === 0, errors };

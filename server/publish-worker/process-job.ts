@@ -1,4 +1,4 @@
-// 发布主链路（Task 4）：批准闸门 → plan dry-run → publish --exec（读回成功标记）→ VERIFY whoami
+// 发布主链路（Task 4）：批准闸门 → plan dry-run → publish/publish-video --exec（按 format 分路）→ VERIFY whoami
 // 成功判据（Global Constraints）：publish 脚本退出 0 且 stdout 含读回对账 success 标记——
 // 标记取自 Easel 脚本源：xhs「✅ 发布成功」、douyin「✅ 抖音发布成功（读回核验：…）」，公共子串「发布成功」
 import type { JobStatus, LogStage, Platform } from "@prisma-generated/enums";
@@ -17,16 +17,36 @@ export function easelScriptFor(platform: Platform): string | null {
   return null;
 }
 
-type VariantLike = { title: string; body: string; tags: string[] };
+/** 视频扩展名（与 format-check VIDEO 形式校验口径一致） */
+export const VIDEO_EXTS = ["mp4", "mov", "webm", "mkv"];
+
+type VariantLike = { title: string; body: string; tags: string[]; format?: string };
 type PostLike = { mediaPaths: string[] };
 
-/** Variant/Post → Easel 内容参数（图文口径；参数表核对自 xhs/douyin argparse：--images 逗号分隔） */
+/**
+ * Variant/Post → Easel 内容参数（按 format 分路；参数表核对自 xhs/douyin argparse）：
+ * - IMAGE_TEXT（缺省）：publish --images 逗号分隔
+ * - VIDEO：publish-video --video 单视频路径（取第一个视频扩展名媒体，回退第一个媒体）；不传 --images
+ */
 export function contentArgs(variant: VariantLike, post: PostLike): string[] {
   const args = ["--title", variant.title];
   if (variant.body) args.push("--content", variant.body);
-  if (post.mediaPaths?.length) args.push("--images", post.mediaPaths.join(","));
+  if (variant.format === "VIDEO") {
+    const media = post.mediaPaths ?? [];
+    const video =
+      media.find((m) => VIDEO_EXTS.includes(m.split(".").pop()?.toLowerCase() ?? "")) ?? media[0];
+    if (video) args.push("--video", video);
+  } else if (post.mediaPaths?.length) {
+    args.push("--images", post.mediaPaths.join(","));
+  }
   if (variant.tags?.length) args.push("--tags", variant.tags.join(","));
   return args;
+}
+
+/** VIDEO 形式取视频媒体（contentArgs 口径一致），无可发媒体返回 null */
+export function videoMedia(variant: VariantLike, post: PostLike): string | null {
+  const media = post.mediaPaths ?? [];
+  return media.find((m) => VIDEO_EXTS.includes(m.split(".").pop()?.toLowerCase() ?? "")) ?? media[0] ?? null;
 }
 
 /** 写 PublishLog；日志写库失败只告警、不阻断主链路（发布结果不因日志故障丢失） */
@@ -79,6 +99,11 @@ async function runJob(
     );
   }
 
+  // VIDEO 形式硬门：入库闸（format-check）已过，但批准后媒体可能被删——无媒体不 spawn，明确 FAILED
+  if (variant.format === "VIDEO" && !videoMedia(variant, post)) {
+    return markFailed(jobId, "视频形式无可发视频文件（Post 媒体为空或无视频扩展名），请补传视频后重发");
+  }
+
   // I-1 并发双跑防护：PENDING→RUNNING CAS（updateMany 检 count）——被并发触发/排期轮次抢占（count=0）
   // 则不 spawn 第二跑，重读库返现态（job 行仍在；理论缺失才落 FAILED 兜底不外抛）
   const cas = await prisma.publishJob.updateMany({
@@ -102,7 +127,9 @@ async function runJob(
   // publish --exec：退出 0 且 stdout 含读回成功标记才算成功（未核实绝不标记成功）
   // I1 抖音短信墙：douyin publish 附加 --status-file（douyin add_common 专属参数，供短信墙轮询）；
   // xhs publish 无此参数（argparse 源），绝不传
-  const publishArgs = [script, "publish", "--exec", ...content];
+  // 子命令按 format 分路：VIDEO → publish-video（xhs/douyin argparse 均含该子命令）；图文缺省 → publish
+  const publishSubcmd = variant.format === "VIDEO" ? "publish-video" : "publish";
+  const publishArgs = [script, publishSubcmd, "--exec", ...content];
   if (variant.platform === "DOUYIN") {
     publishArgs.push("--status-file", DOUYIN_PUBLISH_STATUS_FILE);
     // I1 残留小修：发布前清掉旧的 douyin-publish.json（上轮「短信验证」终态残留会被 isSmsWallStatus 误命中）；force=不存在不报错

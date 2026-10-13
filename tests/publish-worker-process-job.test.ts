@@ -24,7 +24,7 @@ vi.mock("../server/db", () => ({
 import { spawnEasel } from "../server/publish-worker/spawn";
 import { DOUYIN_PUBLISH_STATUS_FILE, readDouyinPublishStatus } from "../server/publish-worker/status";
 import { prisma } from "../server/db";
-import { processJob } from "../server/publish-worker/process-job";
+import { processJob, contentArgs, videoMedia } from "../server/publish-worker/process-job";
 
 const mSpawn = spawnEasel as unknown as Mock;
 const mStatusFile = readDouyinPublishStatus as unknown as Mock;
@@ -32,7 +32,7 @@ const mJob = prisma.publishJob as unknown as { findUnique: Mock; update: Mock; u
 const mVariant = prisma.postVariant as unknown as { findUnique: Mock; update: Mock };
 const mLog = prisma.publishLog as unknown as { create: Mock };
 
-function makeJob(over: { variantStatus?: string; platform?: string } = {}) {
+function makeJob(over: { variantStatus?: string; platform?: string; format?: string; mediaPaths?: string[] } = {}) {
   return {
     id: "job1",
     variantId: "var1",
@@ -48,9 +48,10 @@ function makeJob(over: { variantStatus?: string; platform?: string } = {}) {
       tags: ["A", "B"],
       coverPath: null,
       status: over.variantStatus ?? "APPROVED",
+      format: over.format, // 缺省 undefined=旧数据/表单通道=图文口径
       post: {
         id: "post1",
-        mediaPaths: ["data/publish/media/a.jpg", "data/publish/media/b.jpg"],
+        mediaPaths: over.mediaPaths ?? ["data/publish/media/a.jpg", "data/publish/media/b.jpg"],
       },
     },
   };
@@ -292,6 +293,54 @@ describe("processJob 主链路", () => {
     expect((mSpawn.mock.calls[0][0] as string[])[0]).toBe("douyin_publish.py");
     const publishLogDetail = String(mLog.create.mock.calls[0][0].data.detail);
     expect(publishLogDetail).toContain("7350000000000000001");
+  });
+});
+
+describe("VIDEO 形式分路（publish-video + --video）", () => {
+  it("format=VIDEO → plan/publish-video 带 --video（取第一个视频媒体），不传 --images；退出 0 + 成功标记 → SUCCESS", async () => {
+    mJob.findUnique.mockResolvedValue(
+      makeJob({ format: "VIDEO", mediaPaths: ["data/publish/media/cover.jpg", "data/publish/media/v.mp4"] }),
+    );
+    mSpawn.mockImplementation((args: string[]) => {
+      if (args[1] === "plan") return Promise.resolve({ code: 0, stdout: "dry-run", stderr: "" });
+      if (args[1] === "publish-video")
+        return Promise.resolve({
+          code: 0,
+          stdout: "✅ 发布成功，已跳转：https://creator.xiaohongshu.com/publish/success\n",
+          stderr: "",
+        });
+      if (args[1] === "whoami")
+        return Promise.resolve({ code: 0, stdout: JSON.stringify({ loggedIn: true }) + "\n", stderr: "" });
+      return Promise.resolve({ code: 1, stdout: "", stderr: "unexpected subcmd " + args[1] });
+    });
+
+    const status = await processJob("job1");
+    expect(status).toBe("SUCCESS");
+    const c0 = mSpawn.mock.calls[0][0] as string[];
+    const c1 = mSpawn.mock.calls[1][0] as string[];
+    expect(c0[1]).toBe("plan");
+    expect(c1.slice(0, 3)).toEqual(["xhs_publish.py", "publish-video", "--exec"]);
+    expect(c1[c1.indexOf("--video") + 1]).toBe("data/publish/media/v.mp4");
+    expect(c1).not.toContain("--images");
+  });
+
+  it("format=VIDEO 但无可发媒体 → 明确 FAILED（不静默 spawn），不调 spawn", async () => {
+    mJob.findUnique.mockResolvedValue(makeJob({ format: "VIDEO", mediaPaths: [] }));
+    const status = await processJob("job1");
+    expect(status).toBe("FAILED");
+    expect(mSpawn).not.toHaveBeenCalled();
+    const data = mJob.updateMany.mock.calls.at(-1)![0].data;
+    expect(String(data.lastError)).toContain("视频");
+  });
+
+  it("contentArgs/videoMedia 单元：VIDEO 取第一个视频扩展名（无则回退第一个媒体）；缺省/IMAGE_TEXT 口径不变", () => {
+    expect(contentArgs({ title: "t", body: "", tags: [], format: "VIDEO" }, { mediaPaths: ["a.jpg", "b.mp4", "c.mov"] }))
+      .toEqual(["--title", "t", "--video", "b.mp4"]);
+    expect(contentArgs({ title: "t", body: "", tags: [], format: "VIDEO" }, { mediaPaths: ["weird.bin"] }))
+      .toEqual(["--title", "t", "--video", "weird.bin"]);
+    expect(contentArgs({ title: "t", body: "b", tags: ["x"] }, { mediaPaths: ["a.jpg", "b.png"] }))
+      .toEqual(["--title", "t", "--content", "b", "--images", "a.jpg,b.png", "--tags", "x"]);
+    expect(videoMedia({ title: "t", body: "", tags: [], format: "VIDEO" }, { mediaPaths: [] })).toBeNull();
   });
 });
 

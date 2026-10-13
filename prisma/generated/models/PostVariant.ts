@@ -32,6 +32,7 @@ export type PostVariantMinAggregateOutputType = {
   body: string | null
   coverPath: string | null
   status: $Enums.VariantStatus | null
+  format: string | null
   formatCheck: string | null
   plan: string | null
 }
@@ -44,6 +45,7 @@ export type PostVariantMaxAggregateOutputType = {
   body: string | null
   coverPath: string | null
   status: $Enums.VariantStatus | null
+  format: string | null
   formatCheck: string | null
   plan: string | null
 }
@@ -57,6 +59,7 @@ export type PostVariantCountAggregateOutputType = {
   tags: number
   coverPath: number
   status: number
+  format: number
   formatCheck: number
   plan: number
   _all: number
@@ -71,6 +74,7 @@ export type PostVariantMinAggregateInputType = {
   body?: true
   coverPath?: true
   status?: true
+  format?: true
   formatCheck?: true
   plan?: true
 }
@@ -83,6 +87,7 @@ export type PostVariantMaxAggregateInputType = {
   body?: true
   coverPath?: true
   status?: true
+  format?: true
   formatCheck?: true
   plan?: true
 }
@@ -96,6 +101,7 @@ export type PostVariantCountAggregateInputType = {
   tags?: true
   coverPath?: true
   status?: true
+  format?: true
   formatCheck?: true
   plan?: true
   _all?: true
@@ -182,6 +188,7 @@ export type PostVariantGroupByOutputType = {
   tags: string[]
   coverPath: string | null
   status: $Enums.VariantStatus
+  format: string
   formatCheck: string | null
   plan: string | null
   _count: PostVariantCountAggregateOutputType | null
@@ -216,6 +223,7 @@ export type PostVariantWhereInput = {
   tags?: Prisma.StringNullableListFilter<"PostVariant">
   coverPath?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   status?: Prisma.EnumVariantStatusFilter<"PostVariant"> | $Enums.VariantStatus
+  format?: Prisma.StringFilter<"PostVariant"> | string
   formatCheck?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   plan?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   post?: Prisma.XOR<Prisma.PostScalarRelationFilter, Prisma.PostWhereInput>
@@ -231,6 +239,7 @@ export type PostVariantOrderByWithRelationInput = {
   tags?: Prisma.SortOrder
   coverPath?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  format?: Prisma.SortOrder
   formatCheck?: Prisma.SortOrderInput | Prisma.SortOrder
   plan?: Prisma.SortOrderInput | Prisma.SortOrder
   post?: Prisma.PostOrderByWithRelationInput
@@ -250,6 +259,7 @@ export type PostVariantWhereUniqueInput = Prisma.AtLeast<{
   tags?: Prisma.StringNullableListFilter<"PostVariant">
   coverPath?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   status?: Prisma.EnumVariantStatusFilter<"PostVariant"> | $Enums.VariantStatus
+  format?: Prisma.StringFilter<"PostVariant"> | string
   formatCheck?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   plan?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   post?: Prisma.XOR<Prisma.PostScalarRelationFilter, Prisma.PostWhereInput>
@@ -265,6 +275,7 @@ export type PostVariantOrderByWithAggregationInput = {
   tags?: Prisma.SortOrder
   coverPath?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  format?: Prisma.SortOrder
   formatCheck?: Prisma.SortOrderInput | Prisma.SortOrder
   plan?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.PostVariantCountOrderByAggregateInput
@@ -284,6 +295,7 @@ export type PostVariantScalarWhereWithAggregatesInput = {
   tags?: Prisma.StringNullableListFilter<"PostVariant">
   coverPath?: Prisma.StringNullableWithAggregatesFilter<"PostVariant"> | string | null
   status?: Prisma.EnumVariantStatusWithAggregatesFilter<"PostVariant"> | $Enums.VariantStatus
+  format?: Prisma.StringWithAggregatesFilter<"PostVariant"> | string
   formatCheck?: Prisma.StringNullableWithAggregatesFilter<"PostVariant"> | string | null
   plan?: Prisma.StringNullableWithAggregatesFilter<"PostVariant"> | string | null
 }
@@ -296,6 +308,7 @@ export type PostVariantCreateInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
   post: Prisma.PostCreateNestedOneWithoutVariantsInput
@@ -311,6 +324,7 @@ export type PostVariantUncheckedCreateInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
   job?: Prisma.PublishJobUncheckedCreateNestedOneWithoutVariantInput
@@ -324,6 +338,7 @@ export type PostVariantUpdateInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   post?: Prisma.PostUpdateOneRequiredWithoutVariantsNestedInput
@@ -339,6 +354,7 @@ export type PostVariantUncheckedUpdateInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   job?: Prisma.PublishJobUncheckedUpdateOneWithoutVariantNestedInput
@@ -353,6 +369,7 @@ export type PostVariantCreateManyInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
 }
@@ -365,6 +382,7 @@ export type PostVariantUpdateManyMutationInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
@@ -378,6 +396,7 @@ export type PostVariantUncheckedUpdateManyInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
@@ -406,6 +425,7 @@ export type PostVariantCountOrderByAggregateInput = {
   tags?: Prisma.SortOrder
   coverPath?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  format?: Prisma.SortOrder
   formatCheck?: Prisma.SortOrder
   plan?: Prisma.SortOrder
 }
@@ -418,6 +438,7 @@ export type PostVariantMaxOrderByAggregateInput = {
   body?: Prisma.SortOrder
   coverPath?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  format?: Prisma.SortOrder
   formatCheck?: Prisma.SortOrder
   plan?: Prisma.SortOrder
 }
@@ -430,6 +451,7 @@ export type PostVariantMinOrderByAggregateInput = {
   body?: Prisma.SortOrder
   coverPath?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  format?: Prisma.SortOrder
   formatCheck?: Prisma.SortOrder
   plan?: Prisma.SortOrder
 }
@@ -520,6 +542,7 @@ export type PostVariantCreateWithoutPostInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
   job?: Prisma.PublishJobCreateNestedOneWithoutVariantInput
@@ -533,6 +556,7 @@ export type PostVariantUncheckedCreateWithoutPostInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
   job?: Prisma.PublishJobUncheckedCreateNestedOneWithoutVariantInput
@@ -576,6 +600,7 @@ export type PostVariantScalarWhereInput = {
   tags?: Prisma.StringNullableListFilter<"PostVariant">
   coverPath?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   status?: Prisma.EnumVariantStatusFilter<"PostVariant"> | $Enums.VariantStatus
+  format?: Prisma.StringFilter<"PostVariant"> | string
   formatCheck?: Prisma.StringNullableFilter<"PostVariant"> | string | null
   plan?: Prisma.StringNullableFilter<"PostVariant"> | string | null
 }
@@ -588,6 +613,7 @@ export type PostVariantCreateWithoutJobInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
   post: Prisma.PostCreateNestedOneWithoutVariantsInput
@@ -602,6 +628,7 @@ export type PostVariantUncheckedCreateWithoutJobInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
 }
@@ -630,6 +657,7 @@ export type PostVariantUpdateWithoutJobInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   post?: Prisma.PostUpdateOneRequiredWithoutVariantsNestedInput
@@ -644,6 +672,7 @@ export type PostVariantUncheckedUpdateWithoutJobInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
@@ -656,6 +685,7 @@ export type PostVariantCreateManyPostInput = {
   tags?: Prisma.PostVariantCreatetagsInput | string[]
   coverPath?: string | null
   status?: $Enums.VariantStatus
+  format?: string
   formatCheck?: string | null
   plan?: string | null
 }
@@ -668,6 +698,7 @@ export type PostVariantUpdateWithoutPostInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   job?: Prisma.PublishJobUpdateOneWithoutVariantNestedInput
@@ -681,6 +712,7 @@ export type PostVariantUncheckedUpdateWithoutPostInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   job?: Prisma.PublishJobUncheckedUpdateOneWithoutVariantNestedInput
@@ -694,6 +726,7 @@ export type PostVariantUncheckedUpdateManyWithoutPostInput = {
   tags?: Prisma.PostVariantUpdatetagsInput | string[]
   coverPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumVariantStatusFieldUpdateOperationsInput | $Enums.VariantStatus
+  format?: Prisma.StringFieldUpdateOperationsInput | string
   formatCheck?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   plan?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
@@ -709,6 +742,7 @@ export type PostVariantSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   tags?: boolean
   coverPath?: boolean
   status?: boolean
+  format?: boolean
   formatCheck?: boolean
   plan?: boolean
   post?: boolean | Prisma.PostDefaultArgs<ExtArgs>
@@ -724,6 +758,7 @@ export type PostVariantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   tags?: boolean
   coverPath?: boolean
   status?: boolean
+  format?: boolean
   formatCheck?: boolean
   plan?: boolean
   post?: boolean | Prisma.PostDefaultArgs<ExtArgs>
@@ -738,6 +773,7 @@ export type PostVariantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   tags?: boolean
   coverPath?: boolean
   status?: boolean
+  format?: boolean
   formatCheck?: boolean
   plan?: boolean
   post?: boolean | Prisma.PostDefaultArgs<ExtArgs>
@@ -752,11 +788,12 @@ export type PostVariantSelectScalar = {
   tags?: boolean
   coverPath?: boolean
   status?: boolean
+  format?: boolean
   formatCheck?: boolean
   plan?: boolean
 }
 
-export type PostVariantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "postId" | "platform" | "title" | "body" | "tags" | "coverPath" | "status" | "formatCheck" | "plan", ExtArgs["result"]["postVariant"]>
+export type PostVariantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "postId" | "platform" | "title" | "body" | "tags" | "coverPath" | "status" | "format" | "formatCheck" | "plan", ExtArgs["result"]["postVariant"]>
 export type PostVariantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   post?: boolean | Prisma.PostDefaultArgs<ExtArgs>
   job?: boolean | Prisma.PostVariant$jobArgs<ExtArgs>
@@ -783,6 +820,7 @@ export type $PostVariantPayload<ExtArgs extends runtime.Types.Extensions.Interna
     tags: string[]
     coverPath: string | null
     status: $Enums.VariantStatus
+    format: string
     formatCheck: string | null
     plan: string | null
   }, ExtArgs["result"]["postVariant"]>
@@ -1218,6 +1256,7 @@ export interface PostVariantFieldRefs {
   readonly tags: Prisma.FieldRef<"PostVariant", 'String[]'>
   readonly coverPath: Prisma.FieldRef<"PostVariant", 'String'>
   readonly status: Prisma.FieldRef<"PostVariant", 'VariantStatus'>
+  readonly format: Prisma.FieldRef<"PostVariant", 'String'>
   readonly formatCheck: Prisma.FieldRef<"PostVariant", 'String'>
   readonly plan: Prisma.FieldRef<"PostVariant", 'String'>
 }

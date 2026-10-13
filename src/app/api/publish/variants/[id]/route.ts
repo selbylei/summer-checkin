@@ -31,6 +31,9 @@ export async function PATCH(
   let coverPath: string | null | undefined; // undefined=不改，null=清空
   if (body.coverPath === null) coverPath = null;
   else if (typeof body.coverPath === "string") coverPath = body.coverPath;
+  // 内容形式（技能工作流对齐）：PATCH 可改形式；缺省维持原值（收敛为字面量，checkVariant 口径）
+  const format: "IMAGE_TEXT" | "VIDEO" =
+    body.format === "VIDEO" ? "VIDEO" : body.format === "IMAGE_TEXT" ? "IMAGE_TEXT" : variant.format === "VIDEO" ? "VIDEO" : "IMAGE_TEXT";
 
   if (body.status !== undefined && !["DRAFT", "APPROVED"].includes(String(body.status))) {
     return NextResponse.json(
@@ -39,11 +42,14 @@ export async function PATCH(
     );
   }
 
+  const mediaExts = variant.post.mediaPaths.map((p) => p.split(".").pop()?.toLowerCase() ?? "");
   const check = checkVariant(variant.platform, {
     title,
     body: content,
     tags,
     mediaCount: variant.post.mediaPaths.length,
+    mediaExts,
+    format,
   });
   if (!check.ok) {
     return NextResponse.json({ errors: check.errors }, { status: 422 });
@@ -54,6 +60,7 @@ export async function PATCH(
     body: content,
     tags,
     formatCheck: JSON.stringify(check),
+    format, // 内容形式（缺省维持原值，显式传入则覆盖）
   };
   if (coverPath !== undefined) data.coverPath = coverPath;
   if (body.status !== undefined) data.status = String(body.status);

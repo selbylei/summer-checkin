@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   }
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const content = typeof body.body === "string" ? body.body : "";
-  const tags = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === "string") : [];
+  const tags = Array.isArray(body.tags) ? body.tags.filter((t: unknown): t is string => typeof t === "string") : [];
+  // 内容形式（技能工作流对齐：形式跟着技能走）：缺省图文，VIDEO 时校验要视频文件
+  const format = body.format === "VIDEO" ? "VIDEO" : "IMAGE_TEXT";
   if (!title) return NextResponse.json({ error: "title 必填" }, { status: 400 });
 
   // 域隔离：post 必须归属当前 user（404 口径同 plans）
@@ -38,11 +40,14 @@ export async function POST(req: NextRequest) {
   }
 
   // 图片数上限按 post 媒体总数校验（variant 无独立媒体列表，media 路由回填到 Post.mediaPaths）
+  const mediaExts = post.mediaPaths.map((p) => p.split(".").pop()?.toLowerCase() ?? "");
   const check = checkVariant(platform, {
     title,
     body: content,
     tags,
     mediaCount: post.mediaPaths.length,
+    mediaExts,
+    format,
   });
   if (!check.ok) {
     return NextResponse.json({ errors: check.errors }, { status: 422 });
@@ -58,6 +63,7 @@ export async function POST(req: NextRequest) {
         tags,
         // formatCheck 列存校验结果 JSON（Task 1 schema 注释：校验不过→422 不落库，这里只存通过结果）
         formatCheck: JSON.stringify(check),
+        format,
         ...(typeof body.coverPath === "string" && body.coverPath ? { coverPath: body.coverPath } : {}),
       },
     });

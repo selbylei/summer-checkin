@@ -507,6 +507,10 @@ model PostVariant {
   tags        String[]
   coverPath   String?
   status      VariantStatus @default(DRAFT)
+  // 内容形式（技能工作流对齐：形式跟着技能走，非全平台死规则）：
+  // IMAGE_TEXT=图文（publish --images，需 ≥1 图）/ VIDEO=视频（publish-video --video，需 ≥1 视频文件）
+  // 旧数据/表单通道默认图文，零迁移风险
+  format      String     @default("IMAGE_TEXT")
   // 字数/标签校验结果 JSON（Task 3 format-check 产出，校验不过→API 422 不落库）
   formatCheck String?
   // AI 规划层方案 JSON（planner 产出：angle/format/titles/bodyOutline/tags/timeliness；
