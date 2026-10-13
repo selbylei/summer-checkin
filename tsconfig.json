@@ -31,5 +31,11 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // vendor 的 Easel 技能全量库（Apache-2.0 参考源，114 技能 + 共享层）：
+    // 里面混着 Bun 专用脚本/ES2020+ 语法，不参与本项目类型检查——只当 agent 的 read 资料用
+    "server/publish/skills",
+    "server/publish/shared"
+  ]
 }

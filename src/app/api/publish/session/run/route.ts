@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { workerBase } from "@/lib/publish/worker-client";
 
 // POST /api/publish/session/run {postId, skill}：执行技能工作流（选技能=选工作流，Easel 对齐）。
-// worker 内 spawn pi（--no-tools，SKILL.md 全文进 prompt）出多平台草稿 JSON；同步等待（上限 ~300s）。
+// worker 内 spawn pi（--skill 原生发现 + read/write 工具面，agent 自读 SKILL.md/references/shared 照流程出稿）；同步等待（上限 ~300s）。
 // 域隔离：Post 必须归属当前 user（404 口径同 posts/[id]）。
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();

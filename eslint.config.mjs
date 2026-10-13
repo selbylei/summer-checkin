@@ -23,6 +23,9 @@ const eslintConfig = defineConfig([
     // 本地工具目录：`.claude/worktrees/` 下有历史 git worktree 的完整副本
     // （246 个源文件，比主 src 还多）。不排除的话全量 lint 会把副本整个扫一遍。
     ".claude/**",
+    // vendor 的 Easel 技能全量库（参考源，非本项目代码）：Bun/ES2020+ 语法会拖垮 lint，整库忽略
+    "server/publish/skills/**",
+    "server/publish/shared/**",
   ]),
   {
     /**

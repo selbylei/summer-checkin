@@ -4,8 +4,8 @@ import path from "node:path";
 import { prisma } from "../db";
 import { LIMITS, type Platform } from "../../src/lib/publish/format-check";
 
-// 技能工作流执行（Easel 对齐：选技能=选工作流）。
-// 简化同 planner：SKILL.md 全文进 prompt，pi --no-tools 单轮直出 JSON（零工具面，无写盘越权风险）。
+// 技能工作流执行（Easel 对齐：选技能=选工作流；完整树 vendor，agent 自读 SKILL.md 照流程执行）。
+// 执行面：pi headless + 工具面 read,write 最小化（references/兄弟技能/shared 共享层按需读；P1 不出图不真发）。
 // 产物契约：{platforms:[{platform,title,body,tags,format,mediaNote}]}，采纳由 API 侧逐平台走既有 variants 闸。
 
 export interface SkillDraft {
@@ -27,13 +27,30 @@ export interface SkillInfo {
 
 const PI_TIMEOUT_MS = 300_000;
 const SKILLS_DIR = path.join(process.cwd(), "server", "publish", "skills");
+// 辅助共享层 server/publish/shared/（Easel workspace/shared 同构：skills/<slug>/ 内 `../../shared/...` 相对引用可解）
+/** 产物目录：data/publish/drafts/<postId>/<skill>.json（.gitignore 已覆盖 data/publish/） */
+const DRAFTS_DIR = path.join(process.cwd(), "data", "publish", "drafts");
 
-/** 读 vendor 的 5 技能清单（SKILL.md frontmatter name/description） */
+/** 选技能=选工作流：全量库（114 技能）已 vendor，agent 执行中按需自读；选择器只列首批 5 个工作流技能，
+ * 避免 114 个卡片刷屏（新增可选技能 = 往这里加一行） */
+export const WORKFLOW_SKILLS = [
+  "xhs-note-creator",
+  "card-xiaohongshu",
+  "skill-douyin-upload",
+  "copywriting",
+  "post-formatter",
+] as const;
+
+/** 读 vendor 的工作流技能清单（SKILL.md frontmatter name/description） */
 export function listSkills(): SkillInfo[] {
   const out: SkillInfo[] = [];
   let dirs: string[] = [];
   try {
-    dirs = fs.readdirSync(SKILLS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    dirs = fs
+      .readdirSync(SKILLS_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .filter((n) => (WORKFLOW_SKILLS as readonly string[]).includes(n));
   } catch {
     return out;
   }
@@ -51,21 +68,46 @@ export function listSkills(): SkillInfo[] {
   return out;
 }
 
-/** 读某技能 SKILL.md 全文（进 prompt；文件缺失直接抛） */
+/** 读某技能 SKILL.md 全文（调试/校验用；执行走 pi --skill 原生发现） */
 export function readSkill(slug: string): string {
   const p = path.join(SKILLS_DIR, slug, "SKILL.md");
   if (!fs.existsSync(p)) throw new Error(`技能不存在：${slug}`);
   return fs.readFileSync(p, "utf8");
 }
 
-function runPi(prompt: string): Promise<string> {
+/**
+ * pi 执行参数（Easel 对齐：--skill 原生技能发现，agent 自读 SKILL.md 照流程执行；
+ * 工具面 read,write 最小化——references/兄弟技能/shared 共享层按需 read；write 仅写 drafts 产物；
+ * 无 bash/edit → P1 不出图不真发，脚本步骤由 agent 按 references 口径自核替代）。
+ */
+export function buildPiArgs(prompt: string, skillSlug: string, model: string): string[] {
+  return [
+    "-p",
+    prompt,
+    "--skill",
+    path.join(SKILLS_DIR, skillSlug),
+    "--tools",
+    "read,write",
+    "--no-mcp",
+    "--model",
+    model,
+    "--thinking",
+    "off",
+    "--session-dir",
+    path.join(DRAFTS_DIR, "pi-sessions"),
+  ];
+}
+
+function runPi(prompt: string, skillSlug: string): Promise<string> {
   const piBin = process.env.PUBLISH_PI_BIN || "pi";
   const model = process.env.PUBLISH_PLANNER_MODEL || "agnes-plan/agnes-3.0-flash";
+  // 会话/产物目录就位（write 工具写 drafts/<postId>/ 前需父目录；pi --session-dir 同理）
+  fs.mkdirSync(path.join(DRAFTS_DIR, "pi-sessions"), { recursive: true });
   return new Promise((resolve, reject) => {
     // stdin=ignore（pi 检测 stdin 关闭才以非交互收尾，pipe 式 stdin 会永久挂起）
     const child = spawn(
       piBin,
-      ["-p", prompt, "--no-tools", "--model", model, "--thinking", "off", "--session-dir", "data/publish/plans/pi-sessions"],
+      buildPiArgs(prompt, skillSlug, model),
       {
         cwd: process.cwd(),
         env: { ...process.env, PUBLISH_PI_NONINTERACTIVE: "1" },
@@ -122,11 +164,11 @@ export interface SkillRunResult {
   note: string;
 }
 
-/** 执行技能工作流：读 Post 源内容 + SKILL.md 全文 → pi 出多平台草稿 JSON */
+/** 执行技能工作流：读 Post 源内容 → pi（--skill 原生发现 + read/write 工具面）按技能流程出多平台草稿 JSON */
 export async function runSkillWorkflow(postId: string, skillSlug: string): Promise<SkillRunResult> {
   const post = await prisma.post.findUnique({ where: { id: postId } });
   if (!post) throw new Error("post not found");
-  const skillMd = readSkill(skillSlug);
+  readSkill(skillSlug); // 存在性闸：技能缺失直接抛（不进 pi）
 
   const limitsBlock = (Object.keys(LIMITS) as Platform[])
     .map((p) => {
@@ -141,11 +183,9 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
     })
     .join("；");
 
+  const draftFile = path.join(DRAFTS_DIR, postId, `${skillSlug}.json`);
   const prompt = [
-    `你是社媒内容工作流执行器。下面是选中的技能（SKILL.md 全文），按它的步骤与产出规范执行。`,
-    ``,
-    `## 技能：${skillSlug}`,
-    skillMd,
+    `你是社媒内容工作流执行器。按技能 ${skillSlug}（已通过 --skill 加载；其 SKILL.md 及其引用的辅助文件均在技能目录内，先用 read 工具读完 SKILL.md 再按步骤执行）处理下面的源内容。`,
     ``,
     `## 源内容（Post）`,
     `标题：${post.title}`,
@@ -155,7 +195,13 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
     `## 目标平台硬约束（超限会被发布脚本拦截，方案必须满足）`,
     limitsBlock,
     ``,
-    `## 产物契约（只输出一个 JSON 对象，不要 markdown 代码块/解释）`,
+    `## P1 执行边界`,
+    `- 只出文案草稿：技能里需要跑 Python 脚本的步骤（渲染卡片/跑审计/真发布）不执行，按 references 的口径自查替代，mediaNote 写清媒体要求`,
+    `- 不要写除产物 JSON 以外的任何文件`,
+    ``,
+    `## 产物契约`,
+    `- 用 write 工具把产物 JSON 写到：${draftFile}`,
+    `- 最后再在回复中原样输出同一个 JSON 对象（不要 markdown 代码块/解释）`,
     `{ "platforms": [ { "platform": "XHS"|"DOUYIN"|"GZH", "title": "...", "body": "...", "tags": ["..."], "format": "IMAGE_TEXT"|"VIDEO", "mediaNote": "需要什么样的媒体（如：需要 1 张封面图 / 需要 15 秒内竖版视频 / 无媒体要求）" } ], "note": "整体备注/风险提示（可空）" }`,
     ``,
     `要求：`,
@@ -165,8 +211,15 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
     `- 按技能步骤把源内容改写成该平台风格，不要照抄源内容`,
   ].join("\n");
 
-  const raw = await runPi(prompt);
-  const obj = extractJsonObject(raw);
+  const raw = await runPi(prompt, skillSlug);
+  // stdout 解析失败时回退读 drafts 产物文件（agent 可能只写盘没在回复里复述 JSON）
+  let obj: Record<string, unknown>;
+  try {
+    obj = extractJsonObject(raw);
+  } catch {
+    const disk = fs.readFileSync(draftFile, "utf8");
+    obj = extractJsonObject(disk);
+  }
   const arr = Array.isArray(obj.platforms) ? obj.platforms : [];
   const str = (v: unknown, fb = "") => (typeof v === "string" ? v : fb);
   const platforms: SkillDraft[] = arr
