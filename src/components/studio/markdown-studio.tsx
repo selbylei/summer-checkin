@@ -123,6 +123,8 @@ export interface MarkdownStudioProps {
   readOnly?: boolean;
   /** 进入时的默认视图模式；缺省沿用 readOnly ? 专注阅读 : 左右对照 */
   defaultMode?: EditorPaneMode;
+  /** 顶栏右侧自定义动作（如文档页「发布为内容」；plans 场景不传，行为不变） */
+  actions?: React.ReactNode;
 }
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -144,6 +146,7 @@ export function MarkdownStudio({
   autoFocusAi = false,
   readOnly = false,
   defaultMode,
+  actions,
 }: MarkdownStudioProps) {
   const aiEnabled = !readOnly && Boolean(ai);
   const router = useRouter();
@@ -648,6 +651,7 @@ export function MarkdownStudio({
             AI 已更新 · 撤销
           </button>
         )}
+        {actions}
 
         {/* 桌面端：顶栏中央胶囊 —— 预设套餐组 + 原有 tab 组合 */}
         <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 md:flex">

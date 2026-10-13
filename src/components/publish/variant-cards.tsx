@@ -6,9 +6,10 @@
 // 终态 SUCCESS/FAILED/CANCELLED 停止并 refresh 一次）。未批准不产生任务，排期只发已批准内容。
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Play, Warning } from "@phosphor-icons/react";
+import { CheckCircle, Play, Sparkle, Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PlanButton, type PublishPlan } from "./plan-card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,33 @@ function VariantEditor({
   );
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [planNote, setPlanNote] = useState(""); // AI 方案正文骨架（采纳后不覆盖正文，仅作提示）
 
+  async function handleAdoptPlan(plan: PublishPlan, pickedTitle: string) {
+    if (busy) return;
+    setBusy(true);
+    setPlanNote("");
+    try {
+      // 采纳 = 写入选中标题 + 方案标签；bodyOutline 只进提示条不动正文（人工拍板）
+      setTitle(pickedTitle);
+      setTagsText(plan.tags.join(", "));
+      const r = await publishFetch(`/api/publish/variants/${variant.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: pickedTitle, tags: plan.tags }),
+      });
+      if (!r.ok) {
+        setCheckErrors(r.errors);
+        setCheckNote(r.errors.length === 0 ? r.error : "");
+        toast.error(`方案未保存：${r.errors[0] ?? r.error}（改短标题/标签后重试）`);
+        return;
+      }
+      setDirty(false);
+      setPlanNote(plan.bodyOutline ? `AI 方案正文骨架（参考，未覆盖正文）：${plan.bodyOutline}` : "");
+      toast.success("方案已采纳（标题/标签），核对后「批准并发布」");
+    } finally {
+      setBusy(false);
+    }
+  }
   // 轮询卸载清理（防卸载后 setState / 定时器泄漏）
   useEffect(() => {
     return () => {
@@ -276,6 +303,12 @@ function VariantEditor({
       )}
 
       <div className="mt-auto flex flex-col gap-2 border-t border-white/8 pt-3">
+        {!published && variant.status === "DRAFT" && (
+          <PlanButton variantId={variant.id} platform={platform} onAdopt={handleAdoptPlan} />
+        )}
+        {planNote && (
+          <p className="text-[11px] leading-5 text-primary/90" role="note">{planNote}</p>
+        )}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => void handleCheck()} disabled={busy || published}>
             格式校验

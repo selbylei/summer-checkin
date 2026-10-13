@@ -88,6 +88,29 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
   }
 
   // ---- POST 路由 ----
+  if (method === "POST" && p === "/ai-plan") {
+    // 规划层（Easel 策划层对齐）：spawn pi headless 出发布方案 JSON；同步等待（上限 180s，前端 loading）
+    let variantId: string;
+    try {
+      variantId = (JSON.parse((await readBody(req)) || "{}") as { variantId?: string }).variantId ?? "";
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!variantId) {
+      json(res, 400, { ok: false, error: "variantId 参数缺失" });
+      return;
+    }
+    try {
+      const { planVariant } = await import("./planner");
+      const plan = await planVariant(variantId);
+      json(res, 200, { ok: true, plan });
+    } catch (e) {
+      json(res, 502, { ok: false, error: `规划失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+    }
+    return;
+  }
+
   if (method === "POST" && p === "/plan") {
     let variantId: string;
     try {

@@ -162,6 +162,7 @@ export function ScheduleBoard() {
           const isSmsWall = job.status === "FAILED" && (job.lastError ?? "").includes("需人工验证码");
           const canReschedule = job.status === "PENDING";
           const canCancel = job.status === "PENDING" || job.status === "RUNNING";
+          const isView = job.status === "SUCCESS" || job.status === "FAILED";
           return (
             <div
               key={job.id}
@@ -236,6 +237,20 @@ export function ScheduleBoard() {
                       取消任务
                     </Button>
                   )}
+                </div>
+              )}
+
+              {isView && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      window.location.href = `/publish/logs?jobId=${encodeURIComponent(job.id)}`;
+                    }}
+                  >
+                    查看作品/日志
+                  </Button>
                 </div>
               )}
             </div>

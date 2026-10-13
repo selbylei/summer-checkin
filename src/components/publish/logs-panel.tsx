@@ -17,8 +17,9 @@ export interface PublishJobOption {
   label: string; // 服务端拼好的「平台 · 标题 · 计划时间 · 状态」
 }
 
-export function LogsPanel({ jobs }: { jobs: PublishJobOption[] }) {
-  const [jobId, setJobId] = useState("");
+export function LogsPanel({ jobs, initialJobId = "" }: { jobs: PublishJobOption[]; initialJobId?: string }) {
+  // 支持 ?jobId= 深链（排期页「查看作品」跳入；服务端 page 读 searchParams 传入，避免 useSearchParams 的 Suspense 约束）
+  const [jobId, setJobId] = useState(initialJobId);
   const [logs, setLogs] = useState<PublishLogDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -105,6 +106,29 @@ export function LogsPanel({ jobs }: { jobs: PublishJobOption[] }) {
                 <pre className="mt-2 max-h-64 overflow-auto rounded-md border border-white/8 bg-black/25 p-3 text-[11px] leading-5 text-foreground/85 whitespace-pre-wrap break-all">
                   {log.detail}
                 </pre>
+                {(() => {
+                  // 产物可见：PUBLISH/VERIFY 的 detail 里读回 URL 变可点链接（直接开平台作品页）
+                  const urls = (log.detail.match(/https?:\/\/[^\s）)\]，,;]+/g) ?? [])
+                    .filter((u) => u.startsWith("http") && !u.endsWith("/") || true);
+                  const links = [...new Set(urls)].slice(0, 4);
+                  if (links.length === 0) return null;
+                  return (
+                    <p className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      查看作品：
+                      {links.map((u) => (
+                        <a
+                          key={u}
+                          href={u}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+                        >
+                          {u.length > 48 ? `${u.slice(0, 48)}…` : u}
+                        </a>
+                      ))}
+                    </p>
+                  );
+                })()}
               </details>
             </li>
           ))}

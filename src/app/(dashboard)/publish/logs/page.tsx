@@ -9,8 +9,13 @@ import {
   formatDateTime,
 } from "@/components/publish/publish-shared";
 
-export default async function PublishLogsPage() {
+export default async function PublishLogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ jobId?: string }>;
+}) {
   const user = await requireAuth();
+  const sp = await searchParams;
   const rows = await prisma.postVariant.findMany({
     where: { post: { userId: user.id } },
     include: {
@@ -40,7 +45,7 @@ export default async function PublishLogsPage() {
         </div>
       </header>
       <div className="mt-8">
-        <LogsPanel jobs={options} />
+        <LogsPanel jobs={options} initialJobId={sp.jobId ?? ""} />
       </div>
     </div>
   );

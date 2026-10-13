@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { RocketLaunch } from "@phosphor-icons/react";
 import { MarkdownStudio } from "@/components/studio/markdown-studio";
 
 interface DocStudioClientProps {
@@ -60,6 +61,28 @@ export function DocStudioClient({
     [docId]
   );
 
+  // 发布为内容（Easel 对齐批次②：阅读→发布）：导入到发布内容中枢，后续在 /publish 适配发布
+  const [publishing, setPublishing] = useState(false);
+  const handlePublishAsContent = useCallback(async () => {
+    if (publishing) return;
+    setPublishing(true);
+    try {
+      const res = await fetch("/api/publish/posts/from-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: docId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; errors?: string[]; post?: { title: string } };
+      if (!res.ok) {
+        toast.error(data.errors?.[0] ?? data.error ?? "导入发布内容失败");
+        return;
+      }
+      toast.success(`「${data.post?.title ?? title}」已导入发布内容，去 /publish 适配并批准发布`);
+    } finally {
+      setPublishing(false);
+    }
+  }, [docId, title, publishing]);
+
   const fetchLatest = useCallback(async () => {
     const res = await fetch(`/api/documents/${docId}`);
     if (!res.ok) throw new Error("拉取文档失败");
@@ -79,6 +102,18 @@ export function DocStudioClient({
         backHref={backHref}
         backLabel={backLabel}
         backNavigation={backNavigation}
+        actions={
+          <button
+            type="button"
+            onClick={() => void handlePublishAsContent()}
+            disabled={publishing}
+            title="将本文档导入发布内容中枢（/publish），后续在 /publish 适配并批准发布"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+          >
+            <RocketLaunch className="size-3.5" weight="fill" />
+            {publishing ? "导入中…" : "发布为内容"}
+          </button>
+        }
         ai={
           aiEnabled
             ? {

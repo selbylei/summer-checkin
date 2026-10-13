@@ -22,14 +22,15 @@ export interface VariantCheckResult {
   errors: string[];
 }
 
-interface FieldLimits {
+export interface FieldLimits {
   titleLen?: number;
   bodyLen?: number;
   tagCount?: number;
   mediaCount?: number;
 }
 
-const LIMITS: Record<Platform, FieldLimits> = {
+// 导出给 worker 规划层（planner.ts 把平台硬约束喂给 pi 模型）；纯数据无副作用
+export const LIMITS: Record<Platform, FieldLimits> = {
   XHS: {
     // 标题 ≤20 字：platform-specs.md「标题 ≤20 字」；skill-xhs-publisher 脚本实际按 20 全角字拦截
     titleLen: 20,
