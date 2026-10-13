@@ -88,6 +88,42 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
   }
 
   // ---- POST 路由 ----
+  if (method === "GET" && p === "/skills") {
+    try {
+      const { listSkills } = await import("./skill-run");
+      json(res, 200, { ok: true, skills: listSkills() });
+    } catch (e) {
+      json(res, 500, { ok: false, error: String(e) });
+    }
+    return;
+  }
+
+  if (method === "POST" && p === "/skill-run") {
+    // 技能工作流执行（选技能=选工作流）：同步等待 pi 完成（上限 300s）
+    let postId = "";
+    let skillSlug = "";
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; skill?: string };
+      postId = body.postId ?? "";
+      skillSlug = body.skill ?? "";
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !skillSlug) {
+      json(res, 400, { ok: false, error: "postId/skill 参数缺失" });
+      return;
+    }
+    try {
+      const { runSkillWorkflow } = await import("./skill-run");
+      const result = await runSkillWorkflow(postId, skillSlug);
+      json(res, 200, { ok: true, ...result });
+    } catch (e) {
+      json(res, 502, { ok: false, error: `技能执行失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+    }
+    return;
+  }
+
   if (method === "POST" && p === "/ai-plan") {
     // 规划层（Easel 策划层对齐）：spawn pi headless 出发布方案 JSON；同步等待（上限 180s，前端 loading）。
     // 保留策略：方案生成一次后存 variant.plan（cached 直返）；force=true 重新生成覆盖；DELETE /ai-plan 撤销置 null
