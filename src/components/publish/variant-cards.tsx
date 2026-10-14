@@ -143,7 +143,7 @@ function VariantEditor({
       setTitle(pickedTitle);
       setTagsText(plan.tags.join(", "));
       // 已批准变体改内容 = 回到 DRAFT 重新走批准闸（内容变了，原批准失效）；PATCH 路由 status 白名单含 DRAFT
-      const r = await publishFetch(`/api/publish/variants/${variant.id}`, {
+      const r = await publishFetch<{ warnings?: string[] }>(`/api/publish/variants/${variant.id}`, {
         method: "PATCH",
         body: JSON.stringify({ title: pickedTitle, tags: plan.tags, ...(wasApproved ? { status: "DRAFT" } : {}) }),
       });
@@ -152,6 +152,10 @@ function VariantEditor({
         setCheckNote(r.errors.length === 0 ? r.error : "");
         toast.error(`方案未保存：${r.errors[0] ?? r.error}（改短标题/标签后重试）`);
         return;
+      }
+      // 媒体缺口不卡采纳（内容已存），提示补齐后再批准
+      if (r.data?.warnings?.length) {
+        toast.warning(`${r.data.warnings[0]}——方案已保存，批准/发布前请先补传媒体`);
       }
       setDirty(false);
       setPlanNote(plan.bodyOutline ? `AI 方案正文骨架（参考，未覆盖正文）：${plan.bodyOutline}` : "");

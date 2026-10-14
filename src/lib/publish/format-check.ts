@@ -22,8 +22,17 @@ export interface VariantInput {
 }
 
 export interface VariantCheckResult {
+  /** 内容硬限（标题/正文/标签/媒体上限）是否全过——内容不过 = 编辑/采纳应 422 */
   ok: boolean;
   errors: string[];
+  /** 媒体下限缺口（图文缺图/视频缺视频）——发布期问题：编辑/采纳不卡，批准/发布前必须补齐 */
+  warnings: string[];
+}
+
+export interface CheckOptions {
+  /** 默认 true（建 variant 严口径）：媒体下限缺口计入 errors 阻断；
+   * false（改内容/采纳宽口径）：缺口降为 warnings，不阻断保存 */
+  strictMediaMin?: boolean;
 }
 
 export interface FieldLimits {
@@ -71,8 +80,10 @@ const charCount = (s: string) => [...s].length; // 全角/emoji 按 code point �
 
 export function checkVariant(
   platform: Platform,
-  input: VariantInput
+  input: VariantInput,
+  opts?: CheckOptions
 ): VariantCheckResult {
+  const strictMediaMin = opts?.strictMediaMin ?? true;
   const limits = LIMITS[platform];
   const errors: string[] = [];
 
@@ -99,20 +110,26 @@ export function checkVariant(
   }
 
   // 下限（发布脚本硬门：0 图内容会一路走到 publish 才被脚本拦，前移到入库闸）
+  // 媒体下限是「发布期」问题：缺口计入 warnings；strictMediaMin（建 variant）时升为 errors 阻断，
+  // 改内容/采纳（strictMediaMin=false）不卡保存——存量 0 媒体 variant 可继续编辑，发布前/发布闸兜底
   // VIDEO 形式不要图，要视频——按形式分路，图片下限只管图文
+  const warnings: string[] = [];
   const isVideo = input.format === "VIDEO";
-  if (!isVideo && limits.mediaMin !== undefined && input.mediaCount < limits.mediaMin) {
-    errors.push(
-      `${platform} 缺少图片：当前 ${input.mediaCount} 张（至少 ${limits.mediaMin} 张，图文发布脚本硬门）`
-    );
+  const mediaGap = !isVideo && limits.mediaMin !== undefined && input.mediaCount < limits.mediaMin;
+  if (mediaGap) {
+    const msg = `${platform} 缺少图片：当前 ${input.mediaCount} 张（至少 ${limits.mediaMin} 张，图文发布脚本硬门）`;
+    if (strictMediaMin) errors.push(msg);
+    else warnings.push(msg);
   }
   if (isVideo) {
     const videoExts = ["mp4", "mov", "webm", "mkv"];
     const hasVideo = (input.mediaExts ?? []).some((e) => videoExts.includes(e));
     if (!hasVideo) {
-      errors.push(`${platform} 视频形式缺少视频文件（需 ≥1 个 mp4/mov 媒体）`);
+      const msg = `${platform} 视频形式缺少视频文件（需 ≥1 个 mp4/mov 媒体）`;
+      if (strictMediaMin) errors.push(msg);
+      else warnings.push(msg);
     }
   }
 
-  return { ok: errors.length === 0, errors };
+  return { ok: errors.length === 0, errors, warnings };
 }

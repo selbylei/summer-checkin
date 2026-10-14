@@ -116,3 +116,42 @@ describe("图片下限（发布脚本硬门前移）", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("媒体下限双口径（strictMediaMin）", () => {
+  it("默认严（建 variant/批准语义）：0 图缺口入 errors，ok=false", () => {
+    const r = checkVariant("DOUYIN", { title: "t", body: "好", tags: [], mediaCount: 0 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join()).toContain("缺少图片");
+  });
+
+  it("宽口径（改内容/采纳）：缺口降 warnings，ok=true 不阻断保存；内容硬限仍 422", () => {
+    const r = checkVariant(
+      "DOUYIN",
+      { title: "t", body: "好", tags: [], mediaCount: 0 },
+      { strictMediaMin: false },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.warnings.join()).toContain("缺少图片");
+    // 宽口径不豁免内容硬限：标题超长仍 ok=false
+    const over = checkVariant(
+      "DOUYIN",
+      { title: "字".repeat(31), body: "好", tags: [], mediaCount: 0 },
+      { strictMediaMin: false },
+    );
+    expect(over.ok).toBe(false);
+    expect(over.errors.join()).toContain("标题超长");
+  });
+
+  it("VIDEO 形式缺视频：宽口径降 warnings，严口径入 errors", () => {
+    const loose = checkVariant(
+      "DOUYIN",
+      { title: "t", body: "好", tags: [], mediaCount: 0, format: "VIDEO" },
+      { strictMediaMin: false },
+    );
+    expect(loose.ok).toBe(true);
+    expect(loose.warnings.join()).toContain("缺少视频文件");
+    const strict = checkVariant("DOUYIN", { title: "t", body: "好", tags: [], mediaCount: 0, format: "VIDEO" });
+    expect(strict.ok).toBe(false);
+    expect(strict.errors.join()).toContain("缺少视频文件");
+  });
+});

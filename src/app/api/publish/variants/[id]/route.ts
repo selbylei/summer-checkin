@@ -43,14 +43,21 @@ export async function PATCH(
   }
 
   const mediaExts = variant.post.mediaPaths.map((p) => p.split(".").pop()?.toLowerCase() ?? "");
-  const check = checkVariant(variant.platform, {
-    title,
-    body: content,
-    tags,
-    mediaCount: variant.post.mediaPaths.length,
-    mediaExts,
-    format,
-  });
+  // 媒体下限是「发布期」问题：批准（status→APPROVED）仍严口径阻断（缺媒体批不了）；
+  // 纯内容编辑/采纳宽口径不卡保存——存量 0 媒体 variant 可继续改内容，批准前/发布闸（worker）兜底
+  const approving = body.status === "APPROVED";
+  const check = checkVariant(
+    variant.platform,
+    {
+      title,
+      body: content,
+      tags,
+      mediaCount: variant.post.mediaPaths.length,
+      mediaExts,
+      format,
+    },
+    { strictMediaMin: approving },
+  );
   if (!check.ok) {
     return NextResponse.json({ errors: check.errors }, { status: 422 });
   }
@@ -66,5 +73,6 @@ export async function PATCH(
   if (body.status !== undefined) data.status = String(body.status);
 
   const updated = await prisma.postVariant.update({ where: { id }, data });
-  return NextResponse.json(updated);
+  // warnings（媒体缺口）随响应回传：内容已存，UI 提示「批准/发布前需补齐媒体」
+  return NextResponse.json({ ...updated, warnings: check.warnings });
 }
