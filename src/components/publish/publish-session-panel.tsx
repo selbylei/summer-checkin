@@ -6,7 +6,7 @@
 // → 之后走既有批准闸 + 排期发布。表单通道并存不受影响。
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Check, Lightning, Sparkle } from "@phosphor-icons/react";
+import { Check, Sparkle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PLATFORM_LABEL, publishFetch } from "./publish-shared";
@@ -167,11 +167,48 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
         {skills.length === 0 && <span className="text-xs text-muted-foreground">技能清单加载中…</span>}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <Button size="sm" onClick={() => void send("")} disabled={running || !selected}>
-          <Lightning className="h-3.5 w-3.5" weight="fill" />
-          {running ? "执行中（约 30-180 秒）…" : "开始工作流"}
-        </Button>
+      {/* 对话区（Easel 对齐：聊天即主交互——首条消息启动工作流，后续同会话迭代；出稿卡在下方自动更新） */}
+      <div className="mt-3">
+        <div className="flex items-center gap-2">
+          <input
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                void send(chatInput);
+                setChatInput("");
+              }
+            }}
+            placeholder={selected ? "说一句（如：出小红书一条/标题改活泼点），回车发…" : "先选一个技能，再说要什么…"}
+            disabled={running}
+            className="h-8 flex-1 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none disabled:opacity-50"
+          />
+          <Button size="sm" onClick={() => { void send(chatInput); setChatInput(""); }} disabled={running || !selected}>
+            {running ? "agent 处理中…" : "发送"}
+          </Button>
+        </div>
+        {messages.length > 0 && (
+          <div className="mt-2 flex max-h-48 flex-col gap-2 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`max-w-[85%] rounded-md px-3 py-2 text-xs leading-5 ${
+                  m.role === "user"
+                    ? "self-end bg-primary/15 text-foreground"
+                    : "self-start bg-white/5 text-foreground/85"
+                }`}
+              >
+                <span className="mb-0.5 block text-[10px] text-muted-foreground">
+                  {m.role === "user" ? "你" : "agent"}
+                </span>
+                <span className="whitespace-pre-wrap break-words">{m.text}</span>
+              </div>
+            ))}
+            {running && (
+              <span className="self-start text-[11px] text-muted-foreground">agent 处理中（约 30-180 秒）…</span>
+            )}
+          </div>
+        )}
       </div>
 
       {runError && <p className="mt-2 text-xs text-red-400" role="alert">{runError}</p>}
@@ -220,53 +257,6 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
           })}
         </div>
       )}
-
-      {/* 会话对话（Easel 对齐：多轮迭代草稿）：首条消息启动工作流，后续同会话续跑 */}
-      <div className="mt-4 border-t border-white/8 pt-3">
-        <p className="mb-2 text-[11px] text-muted-foreground">
-          对话调整草稿（如：「标题改活泼点」「再给一条抖音版」）—— agent 在同一会话里改稿，改完出稿卡自动更新
-        </p>
-        {messages.length > 0 && (
-          <div className="mb-2 flex max-h-48 flex-col gap-2 overflow-y-auto">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`max-w-[85%] rounded-md px-3 py-2 text-xs leading-5 ${
-                  m.role === "user"
-                    ? "self-end bg-primary/15 text-foreground"
-                    : "self-start bg-white/5 text-foreground/85"
-                }`}
-              >
-                <span className="mb-0.5 block text-[10px] text-muted-foreground">
-                  {m.role === "user" ? "你" : "agent"}
-                </span>
-                <span className="whitespace-pre-wrap break-words">{m.text}</span>
-              </div>
-            ))}
-            {running && (
-              <span className="self-start text-[11px] text-muted-foreground">agent 处理中（约 30-180 秒）…</span>
-            )}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <input
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing && !running) {
-                void send(chatInput);
-                setChatInput("");
-              }
-            }}
-            placeholder="对草稿提要求，或回车直接发…"
-            disabled={running || !selected}
-            className="h-8 flex-1 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none disabled:opacity-50"
-          />
-          <Button size="sm" onClick={() => { void send(chatInput); setChatInput(""); }} disabled={running || !selected || !chatInput.trim()}>
-            发送
-          </Button>
-        </div>
-      </div>
     </section>
   );
 }

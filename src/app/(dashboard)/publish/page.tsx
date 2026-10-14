@@ -128,6 +128,13 @@ export default async function PublishContentPage() {
                 <PostStatusBadge status={post.status} />
                 <span className="text-xs tabular-nums text-muted-foreground">{formatDateTime(post.createdAt)}</span>
                 <Link
+                  href={`/publish/session/${post.id}`}
+                  className="flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5"
+                >
+                  会话创作
+                  <ArrowUpRight className="size-3.5" weight="bold" />
+                </Link>
+                <Link
                   href="/publish/variants"
                   className="flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5"
                 >
