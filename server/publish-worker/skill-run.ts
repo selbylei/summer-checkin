@@ -22,7 +22,12 @@ export interface SkillDraft {
 export interface SkillInfo {
   slug: string;
   name: string;
+  /** SKILL.md frontmatter description（截断 120 字） */
   description: string;
+  /** 简短中文说明（description 首句，≤40 字）——左侧技能选择器用 */
+  short: string;
+  /** 技能层（Easel frontmatter layer：produce/publish 等） */
+  layer: string;
 }
 
 const PI_TIMEOUT_MS = 300_000;
@@ -58,9 +63,18 @@ export function listSkills(): SkillInfo[] {
     try {
       const raw = fs.readFileSync(path.join(SKILLS_DIR, slug, "SKILL.md"), "utf8");
       const name = raw.match(/^name:\s*(.+)$/m)?.[1]?.trim() ?? slug;
-      const descRaw = raw.match(/^description:\s*(?:>?\s*)?\n?((?:\s+[^\n]+\n?)+)/m);
-      const description = descRaw ? descRaw[1].trim().split(/\s+/).join(" ").slice(0, 120) : "";
-      out.push({ slug, name, description });
+      const descRaw = raw.match(/^description:\s*(?:[>|]\s*)?\n?((?:\s+[^\n]+\n?)+)/m);
+      const fullDesc = (descRaw ? descRaw[1].trim().split(/\s+/).join(" ") : "").replace(/^["'|\s]+|["']\s*$/g, "");
+      const description = fullDesc.slice(0, 120);
+      // 短说明：description 首句（按 。/； 截断），去掉「当用户说…时使用」类触发器尾巴，限 40 字
+      const short = (fullDesc.split(/。|；/)[0] ?? fullDesc)
+        .replace(/当用户说.*$/, "")
+        .replace(/适用场景[:：].*$/, "")
+        .replace(/^"|"$/g, "")
+        .trim()
+        .slice(0, 40);
+      const layer = raw.match(/^layer:\s*(\S+)/m)?.[1] ?? "";
+      out.push({ slug, name, description, short: short || description.slice(0, 40), layer });
     } catch {
       // 缺 SKILL.md 的目录跳过
     }
@@ -330,7 +344,45 @@ export async function runSessionChat(
   } catch {
     // 本轮无产物 JSON（纯问答）——草稿保持旧版，UI 不动
   }
-  return { reply: raw.trim(), platforms, note };
+  // 展示层剥离：agent 回复可能以产物 JSON 收尾（回复=说明+JSON），UI 只留说明文本，出稿看右侧出稿卡
+  const displayReply = stripTrailingDraftJson(raw);
+  return { reply: displayReply, platforms, note };
+}
+
+/** 去掉回复尾部贴的产物草稿 JSON（agent 按产物契约在回复末尾原样输出 JSON；UI 不展示原始 JSON） */
+function stripTrailingDraftJson(raw: string): string {
+  const text = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  // 从末尾往前找最后一个平衡 JSON 对象（字符串内花括号不算）；找到且其后只有空白/围栏 → 截掉
+  const end = text.length;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let jsonStart = -1;
+  for (let i = text.length - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "}") depth++;
+    else if (ch === "{") {
+      depth--;
+      if (depth === 0) {
+        jsonStart = i;
+        break;
+      }
+    }
+    void ch;
+  }
+  // 只认「含 platforms 键」的草稿 JSON，避免误伤说明文本里的小对象
+  if (jsonStart >= 0 && /\"platforms\"/.test(text.slice(jsonStart, end))) {
+    const before = text.slice(0, jsonStart).trim();
+    return before || "（已按你的要求更新出稿，见右侧出稿卡）";
+  }
+  return text.trim();
 }
 
 /** 列某 Post 的草稿文件（面板刷新页时重渲染出稿卡；MVP 聊天记录只在 pi 会话文件，不落 UI） */
