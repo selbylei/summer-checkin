@@ -124,6 +124,47 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (method === "POST" && p === "/session-chat") {
+    // 发布会话聊天（Easel 对齐：每个发布一个聊天会话）：首回合=工作流 prompt，后续 --continue 续跑同会话；
+    // 草稿更新以 agent 写盘的 drafts/<postId>/<skill>.json 为准；同步等待（上限 300s）
+    let postId = "";
+    let skillSlug = "";
+    let userAsk = "";
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; skill?: string; message?: string };
+      postId = body.postId ?? "";
+      skillSlug = body.skill ?? "";
+      userAsk = typeof body.message === "string" ? body.message : "";
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !skillSlug) {
+      json(res, 400, { ok: false, error: "postId/skill 参数缺失" });
+      return;
+    }
+    try {
+      const { runSessionChat } = await import("./skill-run");
+      const result = await runSessionChat(postId, skillSlug, userAsk);
+      json(res, 200, { ok: true, ...result });
+    } catch (e) {
+      json(res, 502, { ok: false, error: `会话执行失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+    }
+    return;
+  }
+
+  if (method === "GET" && p === "/session-drafts") {
+    // 列某 Post 的草稿文件（面板刷新页重渲染出稿卡）
+    const postId = (url.searchParams.get("postId") ?? "").trim();
+    if (!postId) {
+      json(res, 400, { ok: false, error: "postId 参数缺失" });
+      return;
+    }
+    const { listPostDrafts } = await import("./skill-run");
+    json(res, 200, { ok: true, drafts: listPostDrafts(postId) });
+    return;
+  }
+
   if (method === "POST" && p === "/ai-plan") {
     // 规划层（Easel 策划层对齐）：spawn pi headless 出发布方案 JSON；同步等待（上限 180s，前端 loading）。
     // 保留策略：方案生成一次后存 variant.plan（cached 直返）；force=true 重新生成覆盖；DELETE /ai-plan 撤销置 null

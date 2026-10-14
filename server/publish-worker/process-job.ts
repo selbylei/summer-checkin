@@ -5,6 +5,7 @@ import type { JobStatus, LogStage, Platform } from "@prisma-generated/enums";
 import { promises as fs } from "node:fs";
 import { prisma } from "../db";
 import { spawnEasel } from "./spawn";
+import { LIMITS } from "../../src/lib/publish/format-check";
 import { DOUYIN_PUBLISH_STATUS_FILE, douyinPublishStatusPath, readDouyinPublishStatus } from "./status";
 
 /** Easel stdout 读回成功标记（xhs/douyin publish 成功路径公共子串；dry-run 输出只含「成功校验」不会误中） */
@@ -102,6 +103,19 @@ async function runJob(
   // VIDEO 形式硬门：入库闸（format-check）已过，但批准后媒体可能被删——无媒体不 spawn，明确 FAILED
   if (variant.format === "VIDEO" && !videoMedia(variant, post)) {
     return markFailed(jobId, "视频形式无可发视频文件（Post 媒体为空或无视频扩展名），请补传视频后重发");
+  }
+
+  // IMAGE_TEXT 形式媒体闸（与 VIDEO 闸对称）：入库闸只管建 variant，但媒体可能建于闸前/批准后删光——
+  // 发布时不满足平台媒体下限不 spawn 浏览器，明确 FAILED + 补救指引（不静默走到 Easel 脚本 exit 1）
+  if (variant.format !== "VIDEO") {
+    const mediaMin = LIMITS[variant.platform]?.mediaMin;
+    const mediaCount = post.mediaPaths?.length ?? 0;
+    if (mediaMin !== undefined && mediaCount < mediaMin) {
+      return markFailed(
+        jobId,
+        `缺少媒体：${variant.platform} 图文发布需至少 ${mediaMin} 个媒体，当前 ${mediaCount}——请到 Post 素材区补传后重发（或改 VIDEO 形式传视频）`,
+      );
+    }
   }
 
   // I-1 并发双跑防护：PENDING→RUNNING CAS（updateMany 检 count）——被并发触发/排期轮次抢占（count=0）

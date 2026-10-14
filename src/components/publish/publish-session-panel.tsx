@@ -1,12 +1,12 @@
 "use client";
 
-// 发布会话（Easel 对齐：每个发布一个会话，选题后选技能=选工作流）。
-// 流程：选技能卡片 → 「开始工作流」（worker 内 pi 执行 SKILL.md，30-180s）
-// → 出稿卡（多平台草稿 + 媒体要求）→ 「采纳」逐平台走既有 variants 闸（422/409 原样）
+// 发布会话（Easel 对齐：每个发布一个聊天会话，选技能=选工作流，可多轮对话迭代草稿）。
+// 流程：选技能 → 聊天框发指令（首条=启动工作流，worker 内 pi 同会话续跑）
+// → 出稿卡（多平台草稿 + 媒体要求，可刷新页恢复）→ 「采纳」逐平台走既有 variants 闸（422/409 原样）
 // → 之后走既有批准闸 + 排期发布。表单通道并存不受影响。
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowClockwise, Check, Lightning, Sparkle } from "@phosphor-icons/react";
+import { Check, Lightning, Sparkle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PLATFORM_LABEL, publishFetch } from "./publish-shared";
@@ -24,6 +24,16 @@ interface SkillDraft {
   format: "IMAGE_TEXT" | "VIDEO";
   mediaNote: string;
 }
+interface ChatMsg {
+  role: "user" | "agent";
+  text: string;
+}
+interface DraftFile {
+  skill: string;
+  platforms: SkillDraft[];
+  note: string;
+  mtimeMs: number;
+}
 
 export function PublishSessionPanel({ postId, postTitle }: { postId: string; postTitle: string }) {
   const router = useRouter();
@@ -34,6 +44,8 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
   const [drafts, setDrafts] = useState<SkillDraft[] | null>(null);
   const [runNote, setRunNote] = useState("");
   const [adoptState, setAdoptState] = useState<Record<string, string>>({}); // platform → ok/409/422…
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
 
   const loadSkills = useCallback(async () => {
     const r = await publishFetch<{ skills: SkillInfo[] }>("/api/publish/skills");
@@ -44,30 +56,55 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
     setSkills(r.data?.skills ?? []);
   }, []);
 
-  const run = useCallback(
-    async (force: boolean) => {
+  // 刷新页恢复出稿卡（agent 写盘的草稿文件；MVP 聊天记录不恢复，只恢复稿件）
+  useEffect(() => {
+    void (async () => {
+      const r = await publishFetch<{ ok: boolean; drafts: DraftFile[] }>(
+        `/api/publish/session/drafts?postId=${encodeURIComponent(postId)}`
+      );
+      if (!r.ok || !r.data?.drafts?.length) return;
+      const latest = [...r.data.drafts].sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+      if (latest.platforms.length > 0) {
+        setDrafts(latest.platforms);
+        setRunNote(latest.note);
+        setSelected(latest.skill);
+      }
+    })();
+  }, [postId]);
+
+  useEffect(() => {
+    void loadSkills();
+  }, [loadSkills]);
+
+  // 聊天（首条=启动工作流，后续=同会话迭代）：返回的 platforms 非空则刷新出稿卡
+  const send = useCallback(
+    async (message: string) => {
       if (!selected) {
         toast.warning("先选一个技能（=选工作流）");
         return;
       }
+      const text = message.trim();
       setRunning(true);
       setRunError("");
-      setAdoptState({});
+      setMessages((m) => [...m, { role: "user", text: text || "（启动工作流）" }]);
       try {
-        const r = await publishFetch<{ platforms: SkillDraft[]; note: string }>(
-          "/api/publish/session/run",
-          { method: "POST", body: JSON.stringify({ postId, skill: selected }) }
+        const r = await publishFetch<{ reply?: string; platforms?: SkillDraft[]; note?: string; error?: string }>(
+          "/api/publish/session/chat",
+          { method: "POST", body: JSON.stringify({ postId, skill: selected, message: text }) }
         );
         if (!r.ok) {
-          setRunError(r.error || "技能执行失败");
+          setRunError(r.error || "会话执行失败");
+          setMessages((m) => m.slice(0, -1)); // 失败回退用户气泡
           return;
         }
-        setDrafts(r.data?.platforms ?? []);
-        setRunNote(r.data?.note ?? "");
-        toast.success("工作流执行完成，逐平台核对后采纳");
+        setMessages((m) => [...m, { role: "agent", text: r.data?.reply || "（无回复）" }]);
+        if (r.data?.platforms?.length) {
+          setDrafts(r.data.platforms);
+          setRunNote(r.data.note ?? "");
+          setAdoptState({}); // 新稿重新核对
+        }
       } finally {
         setRunning(false);
-        void force;
       }
     },
     [postId, selected]
@@ -131,20 +168,10 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        <Button
-          size="sm"
-          onClick={() => void run(false)}
-          disabled={running || !selected}
-        >
+        <Button size="sm" onClick={() => void send("")} disabled={running || !selected}>
           <Lightning className="h-3.5 w-3.5" weight="fill" />
-          {running ? "工作流执行中（约 30-180 秒）…" : "开始工作流"}
+          {running ? "执行中（约 30-180 秒）…" : "开始工作流"}
         </Button>
-        {drafts && (
-          <Button variant="outline" size="sm" onClick={() => void run(true)} disabled={running}>
-            <ArrowClockwise className="h-3.5 w-3.5" />
-            重跑
-          </Button>
-        )}
       </div>
 
       {runError && <p className="mt-2 text-xs text-red-400" role="alert">{runError}</p>}
@@ -193,6 +220,53 @@ export function PublishSessionPanel({ postId, postTitle }: { postId: string; pos
           })}
         </div>
       )}
+
+      {/* 会话对话（Easel 对齐：多轮迭代草稿）：首条消息启动工作流，后续同会话续跑 */}
+      <div className="mt-4 border-t border-white/8 pt-3">
+        <p className="mb-2 text-[11px] text-muted-foreground">
+          对话调整草稿（如：「标题改活泼点」「再给一条抖音版」）—— agent 在同一会话里改稿，改完出稿卡自动更新
+        </p>
+        {messages.length > 0 && (
+          <div className="mb-2 flex max-h-48 flex-col gap-2 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`max-w-[85%] rounded-md px-3 py-2 text-xs leading-5 ${
+                  m.role === "user"
+                    ? "self-end bg-primary/15 text-foreground"
+                    : "self-start bg-white/5 text-foreground/85"
+                }`}
+              >
+                <span className="mb-0.5 block text-[10px] text-muted-foreground">
+                  {m.role === "user" ? "你" : "agent"}
+                </span>
+                <span className="whitespace-pre-wrap break-words">{m.text}</span>
+              </div>
+            ))}
+            {running && (
+              <span className="self-start text-[11px] text-muted-foreground">agent 处理中（约 30-180 秒）…</span>
+            )}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing && !running) {
+                void send(chatInput);
+                setChatInput("");
+              }
+            }}
+            placeholder="对草稿提要求，或回车直接发…"
+            disabled={running || !selected}
+            className="h-8 flex-1 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none disabled:opacity-50"
+          />
+          <Button size="sm" onClick={() => { void send(chatInput); setChatInput(""); }} disabled={running || !selected || !chatInput.trim()}>
+            发送
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }

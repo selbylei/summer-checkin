@@ -344,6 +344,30 @@ describe("VIDEO 形式分路（publish-video + --video）", () => {
   });
 });
 
+describe("发布前媒体闸（批准后删媒体/旧 variant 防线）", () => {
+  it("format=IMAGE_TEXT（缺省）+ DOUYIN 媒体 0 张 → 不 spawn，明确 FAILED + 补救指引", async () => {
+    mJob.findUnique.mockResolvedValue(makeJob({ platform: "DOUYIN", mediaPaths: [] }));
+    const status = await processJob("job1");
+    expect(status).toBe("FAILED");
+    expect(mSpawn).not.toHaveBeenCalled();
+    const data = mJob.updateMany.mock.calls.at(-1)![0].data;
+    expect(String(data.lastError)).toContain("缺少媒体");
+    expect(String(data.lastError)).toContain("至少 1 个媒体");
+  });
+
+  it("format=IMAGE_TEXT + 媒体够 → 照常进主链路（不新造闸）", async () => {
+    mJob.findUnique.mockResolvedValue(makeJob({ platform: "DOUYIN" })); // 默认 2 张媒体
+    mSpawn.mockImplementation((args: string[]) => {
+      if (args[1] === "plan") return Promise.resolve({ code: 0, stdout: "dry-run", stderr: "" });
+      if (args[1] === "publish")
+        return Promise.resolve({ code: 0, stdout: "✅ 抖音发布成功（读回核验：123）\n", stderr: "" });
+      return Promise.resolve({ code: 0, stdout: JSON.stringify({ loggedIn: true }), stderr: "" });
+    });
+    const status = await processJob("job1");
+    expect(status).toBe("SUCCESS");
+  });
+});
+
 describe("I-1 并发双跑防护 + M1 cancel 竞态（终态写 CAS）", () => {
   it("I-1: PENDING→RUNNING CAS count=0（被并发触发/排期轮次抢占）→ 不 spawn，重读库返现态", async () => {
     mJob.findUnique

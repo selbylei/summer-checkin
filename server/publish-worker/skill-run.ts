@@ -79,8 +79,9 @@ export function readSkill(slug: string): string {
  * pi 执行参数（Easel 对齐：--skill 原生技能发现，agent 自读 SKILL.md 照流程执行；
  * 工具面 read,write 最小化——references/兄弟技能/shared 共享层按需 read；write 仅写 drafts 产物；
  * 无 bash/edit → P1 不出图不真发，脚本步骤由 agent 按 references 口径自核替代）。
+ * sessionDir：发布会话 per-post（data/publish/drafts/<postId>/pi-sessions），默认全局 plans 目录（ai-plan 旧口径）。
  */
-export function buildPiArgs(prompt: string, skillSlug: string, model: string): string[] {
+export function buildPiArgs(prompt: string, skillSlug: string, model: string, sessionDir?: string): string[] {
   return [
     "-p",
     prompt,
@@ -94,20 +95,25 @@ export function buildPiArgs(prompt: string, skillSlug: string, model: string): s
     "--thinking",
     "off",
     "--session-dir",
-    path.join(DRAFTS_DIR, "pi-sessions"),
+    sessionDir ?? path.join(DRAFTS_DIR, "pi-sessions"),
   ];
 }
 
-function runPi(prompt: string, skillSlug: string): Promise<string> {
+function resolveModel(): string {
+  return process.env.PUBLISH_PLANNER_MODEL || "agnes-plan/agnes-3.0-flash";
+}
+
+function runPi(args: string[]): Promise<string> {
   const piBin = process.env.PUBLISH_PI_BIN || "pi";
-  const model = process.env.PUBLISH_PLANNER_MODEL || "agnes-plan/agnes-3.0-flash";
+  const sessionDirIdx = args.indexOf("--session-dir");
   // 会话/产物目录就位（write 工具写 drafts/<postId>/ 前需父目录；pi --session-dir 同理）
-  fs.mkdirSync(path.join(DRAFTS_DIR, "pi-sessions"), { recursive: true });
+  const sd = sessionDirIdx >= 0 ? args[sessionDirIdx + 1] : path.join(DRAFTS_DIR, "pi-sessions");
+  fs.mkdirSync(sd, { recursive: true });
   return new Promise((resolve, reject) => {
     // stdin=ignore（pi 检测 stdin 关闭才以非交互收尾，pipe 式 stdin 会永久挂起）
     const child = spawn(
       piBin,
-      buildPiArgs(prompt, skillSlug, model),
+      args,
       {
         cwd: process.cwd(),
         env: { ...process.env, PUBLISH_PI_NONINTERACTIVE: "1" },
@@ -164,13 +170,9 @@ export interface SkillRunResult {
   note: string;
 }
 
-/** 执行技能工作流：读 Post 源内容 → pi（--skill 原生发现 + read/write 工具面）按技能流程出多平台草稿 JSON */
-export async function runSkillWorkflow(postId: string, skillSlug: string): Promise<SkillRunResult> {
-  const post = await prisma.post.findUnique({ where: { id: postId } });
-  if (!post) throw new Error("post not found");
-  readSkill(skillSlug); // 存在性闸：技能缺失直接抛（不进 pi）
-
-  const limitsBlock = (Object.keys(LIMITS) as Platform[])
+/** 平台硬约束文本（喂 prompt） */
+function limitsBlock(): string {
+  return (Object.keys(LIMITS) as Platform[])
     .map((p) => {
       const l = LIMITS[p];
       const lines: string[] = [];
@@ -182,8 +184,15 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
       return `${p}：${lines.join("，") || "无硬上限"}`;
     })
     .join("；");
+}
 
-  const draftFile = path.join(DRAFTS_DIR, postId, `${skillSlug}.json`);
+/** 首回合全量 prompt（技能工作流 + 源内容 + 硬约束 + 产物契约）；userAsk 非空时追加用户要求 */
+export function buildWorkflowPrompt(
+  post: { title: string; body: string; mediaPaths: string[] },
+  skillSlug: string,
+  draftFile: string,
+  userAsk?: string,
+): string {
   const prompt = [
     `你是社媒内容工作流执行器。按技能 ${skillSlug}（已通过 --skill 加载；其 SKILL.md 及其引用的辅助文件均在技能目录内，先用 read 工具读完 SKILL.md 再按步骤执行）处理下面的源内容。`,
     ``,
@@ -193,7 +202,7 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
     `媒体：${post.mediaPaths.length ? post.mediaPaths.join("、") : "无"}`,
     ``,
     `## 目标平台硬约束（超限会被发布脚本拦截，方案必须满足）`,
-    limitsBlock,
+    limitsBlock(),
     ``,
     `## P1 执行边界`,
     `- 只出文案草稿：技能里需要跑 Python 脚本的步骤（渲染卡片/跑审计/真发布）不执行，按 references 的口径自查替代，mediaNote 写清媒体要求`,
@@ -209,20 +218,16 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
     `- GZH 暂不接入发布（P2），若技能含 GZH 稿可出但 mediaNote 注明「GZH 未接入，仅预览」`,
     `- 每条 title/body 必须满足上面对应平台的硬约束（先数好再写）`,
     `- 按技能步骤把源内容改写成该平台风格，不要照抄源内容`,
-  ].join("\n");
+  ];
+  if (userAsk) prompt.push(``, `## 用户附加要求（随本次请求）`, userAsk);
+  return prompt.join("\n");
+}
 
-  const raw = await runPi(prompt, skillSlug);
-  // stdout 解析失败时回退读 drafts 产物文件（agent 可能只写盘没在回复里复述 JSON）
-  let obj: Record<string, unknown>;
-  try {
-    obj = extractJsonObject(raw);
-  } catch {
-    const disk = fs.readFileSync(draftFile, "utf8");
-    obj = extractJsonObject(disk);
-  }
+/** 产物 JSON → 规范化草稿列表（平台白名单/形式归一/缺省值） */
+export function normalizePlatforms(obj: Record<string, unknown>): SkillDraft[] {
   const arr = Array.isArray(obj.platforms) ? obj.platforms : [];
   const str = (v: unknown, fb = "") => (typeof v === "string" ? v : fb);
-  const platforms: SkillDraft[] = arr
+  return arr
     .map((x) => {
       const o = x as Record<string, unknown>;
       const platform = (["XHS", "DOUYIN", "GZH"] as const).includes(o.platform as Platform)
@@ -235,11 +240,122 @@ export async function runSkillWorkflow(postId: string, skillSlug: string): Promi
         title: str(o.title),
         body: str(o.body),
         tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === "string") : [],
-        format,
+        format: format as "IMAGE_TEXT" | "VIDEO",
         mediaNote: str(o.mediaNote, format === "VIDEO" ? "需要视频文件" : "需要至少 1 张图片"),
       };
     })
     .filter((x): x is SkillDraft => x !== null);
+}
+
+/** 执行技能工作流（首回合）：读 Post 源内容 → pi（--skill 原生发现 + read/write 工具面）按技能流程出多平台草稿 JSON */
+export async function runSkillWorkflow(postId: string, skillSlug: string): Promise<SkillRunResult> {
+  const post = await prisma.post.findUnique({ where: { id: postId } });
+  if (!post) throw new Error("post not found");
+  readSkill(skillSlug); // 存在性闸：技能缺失直接抛（不进 pi）
+
+  const draftFile = path.join(DRAFTS_DIR, postId, `${skillSlug}.json`);
+  // 会话 per-post（与 runSessionChat 同目录，首回合建会话，聊天续跑）
+  const sessionDir = path.join(DRAFTS_DIR, postId, "pi-sessions");
+  const prompt = buildWorkflowPrompt(post, skillSlug, draftFile);
+  const raw = await runPi(buildPiArgs(prompt, skillSlug, resolveModel(), sessionDir));
+  const obj = parseDraftObject(raw, draftFile);
+  const platforms = normalizePlatforms(obj);
   if (platforms.length === 0) throw new Error("技能输出缺少可用的平台草稿");
+  const str = (v: unknown, fb = "") => (typeof v === "string" ? v : fb);
   return { platforms, note: str(obj.note) };
+}
+
+/** stdout 优先解析，失败回退读盘上产物（agent 可能只写盘没在回复里复述 JSON） */
+function parseDraftObject(raw: string, draftFile: string): Record<string, unknown> {
+  try {
+    return extractJsonObject(raw);
+  } catch {
+    const disk = fs.readFileSync(draftFile, "utf8");
+    return extractJsonObject(disk);
+  }
+}
+
+export interface SessionChatResult {
+  /** agent 回复文本（可能含产物 JSON，UI 只展示文本） */
+  reply: string;
+  /** 本轮产物有更新时返回（agent 重写 drafts 文件后读回）；纯问答无更新则 undefined */
+  platforms?: SkillDraft[];
+  note?: string;
+}
+
+/**
+ * 发布会话聊天（Easel 对齐：每个发布一个聊天会话，多轮对话迭代草稿）。
+ * 首回合（该 post 无 pi 会话）= 全量工作流 prompt（可带用户附加要求）；后续回合 --continue 续跑同会话。
+ * 草稿更新以 agent 写盘的 drafts/<postId>/<skill>.json 为准（回复文本解析 JSON 失败时读盘）。
+ */
+export async function runSessionChat(
+  postId: string,
+  skillSlug: string,
+  userAsk: string,
+): Promise<SessionChatResult> {
+  const post = await prisma.post.findUnique({ where: { id: postId } });
+  if (!post) throw new Error("post not found");
+  readSkill(skillSlug);
+
+  const draftFile = path.join(DRAFTS_DIR, postId, `${skillSlug}.json`);
+  const sessionDir = path.join(DRAFTS_DIR, postId, "pi-sessions");
+  fs.mkdirSync(path.join(DRAFTS_DIR, postId), { recursive: true });
+  fs.mkdirSync(sessionDir, { recursive: true });
+  const hasSession = fs.readdirSync(sessionDir).some((f) => f.endsWith(".jsonl"));
+
+  const prompt = hasSession
+    ? [
+        `继续本发布会话（上下文已有技能 ${skillSlug}、源内容与当前草稿）。用户新要求：`,
+        userAsk,
+        ``,
+        `规则：`,
+        `- 需调整草稿时：按产物契约格式用 write 工具重写 ${draftFile}，并在回复末尾原样输出更新后的完整产物 JSON`,
+        `- 纯问答/无需改稿时：简短回答即可，不要输出 JSON`,
+      ].join("\n")
+    : buildWorkflowPrompt(post, skillSlug, draftFile, userAsk || undefined);
+
+  const args = buildPiArgs(prompt, skillSlug, resolveModel(), sessionDir);
+  if (hasSession) args.push("--continue");
+  const raw = await runPi(args);
+
+  // 产物更新：以盘上 drafts 文件为准（agent 每轮改稿后写盘）；无 JSON 不报错（纯问答）
+  let platforms: SkillDraft[] | undefined;
+  let note: string | undefined;
+  try {
+    const obj = parseDraftObject(raw, draftFile);
+    if (obj && obj.platforms) {
+      platforms = normalizePlatforms(obj);
+      note = typeof obj.note === "string" ? obj.note : undefined;
+    }
+  } catch {
+    // 本轮无产物 JSON（纯问答）——草稿保持旧版，UI 不动
+  }
+  return { reply: raw.trim(), platforms, note };
+}
+
+/** 列某 Post 的草稿文件（面板刷新页时重渲染出稿卡；MVP 聊天记录只在 pi 会话文件，不落 UI） */
+export function listPostDrafts(postId: string): { skill: string; platforms: SkillDraft[]; note: string; mtimeMs: number }[] {
+  const dir = path.join(DRAFTS_DIR, postId);
+  let files: string[] = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+  } catch {
+    return [];
+  }
+  return files
+    .map((f) => {
+      try {
+        const obj = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as Record<string, unknown>;
+        const st = fs.statSync(path.join(dir, f));
+        return {
+          skill: f.replace(/\.json$/, ""),
+          platforms: normalizePlatforms(obj),
+          note: typeof obj.note === "string" ? obj.note : "",
+          mtimeMs: st.mtimeMs,
+        };
+      } catch {
+        return null; // 坏文件跳过
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 }
