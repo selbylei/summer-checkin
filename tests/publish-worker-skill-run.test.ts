@@ -22,9 +22,12 @@ describe("buildPiArgs（pi 执行面）", () => {
 });
 
 describe("listSkills（选择器口径）", () => {
-  it("只列首批 5 工作流技能（辅助层不进选择器），slug 集合与 WORKFLOW_SKILLS 一致", () => {
+  it("列出全部技能（2026-10-15 拍板：毛筆入口全量，不限首批 5）；首批 5 仍在其内", () => {
     const skills = listSkills();
-    expect(skills.map((s) => s.slug).sort()).toEqual([...WORKFLOW_SKILLS].sort());
+    expect(skills.length).toBeGreaterThan(50); // 全量库（当前 114 技能）
+    for (const w of WORKFLOW_SKILLS) {
+      expect(skills.some((s) => s.slug === w)).toBe(true); // 首批 5 仍在
+    }
     for (const s of skills) expect(s.name.length).toBeGreaterThan(0);
   });
 });
@@ -50,13 +53,16 @@ describe("技能全量库 vendor 完整性（随机抽样）", () => {
     return pool.slice(0, Math.min(n, pool.length));
   }
 
-  it("抽 6 个技能：SKILL.md 存在且 frontmatter name=目录名、description 非空", () => {
+  it("抽 6 个技能：SKILL.md 存在且 frontmatter name 可解析（=目录名或已知别名）、description 非空", () => {
     const slugs = sampleSkills(6);
     expect(slugs.length).toBeGreaterThanOrEqual(5); // 库不该缩水到 5 以下（114 量级）
+    // vendor 数据已知：个别技能 name≠目录名（别名表），不断言全量一致
+    const NAME_ALIASES: Record<string, string> = { redbook: "skill-xhs-analyzer" };
     for (const slug of slugs) {
       const raw = fs.readFileSync(path.join(SKILLS_DIR, slug, "SKILL.md"), "utf8");
       const name = raw.match(/^name:\s*(.+)$/m)?.[1]?.trim();
-      expect(name, `${slug}/SKILL.md frontmatter name`).toBe(slug);
+      expect(name, `${slug}/SKILL.md frontmatter name 为空`).toBeTruthy();
+      expect(name === slug || NAME_ALIASES[name ?? ""] === slug, `${slug} name=${name} 既非目录名也非已知别名`).toBe(true);
       expect(raw.slice(0, 400).includes("description"), `${slug} 缺 description`).toBe(true);
     }
   });

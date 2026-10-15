@@ -38,6 +38,73 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+// ---- SSE 流式（发布会话：跟正常 AI 聊天一样逐字显示过程；pi 会话 jsonl 边跑边写，轮询取增量）----
+function sseOpen(res: ServerResponse): { send: (obj: unknown) => void; close: () => void } {
+  res.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  let open = true;
+  const keep = setInterval(() => {
+    if (open) {
+      try {
+        res.write(": ping\n\n");
+      } catch {
+        open = false;
+      }
+    }
+  }, 15000);
+  const send = (obj: unknown) => {
+    if (!open) return;
+    try {
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      open = false;
+    }
+  };
+  const close = () => {
+    clearInterval(keep);
+    open = false;
+    try {
+      res.end();
+    } catch {
+      /* 已断 */
+    }
+  };
+  return { send, close };
+}
+
+// 流式过程：dir 下 pi 会话 assistant 文本/动作增量（700ms tick）；客户端断开则停 tick（pi 子进程不中断，产物仍落盘）
+async function sseStreamLive(
+  req: IncomingMessage,
+  sse: { send: (o: unknown) => void; close: () => void },
+  dir: string,
+): Promise<void> {
+  const { liveAssistantTexts } = await import("./skill-run");
+  // 基线：同文件（--continue 追加）不回放历史轮次；pi 新建文件=全新基线（全部属于本轮）
+  const base = liveAssistantTexts(dir);
+  let baseFile = base.file;
+  let last = base.text.length;
+  const timer = setInterval(() => {
+    try {
+      const cur = liveAssistantTexts(dir);
+      if (cur.file !== baseFile) {
+        baseFile = cur.file;
+        last = 0; // 新文件=本轮起算，防旧文件基线吞掉新文件增量
+      }
+      if (cur.text.length > last) {
+        sse.send({ kind: "delta", text: cur.text.slice(last) });
+        last = cur.text.length;
+      }
+    } catch {
+      /* tick 失败不停（下 tick 重试） */
+    }
+  }, 700);
+  req.on("close", () => clearInterval(timer));
+}
+
 function platformFrom(url: URL): string {
   return (url.searchParams.get("platform") ?? "").trim().toLowerCase();
 }
@@ -124,17 +191,99 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && p === "/session-plans") {
+    // 读某纪录的规划方案（plans.json；UI 恢复方案选择卡）
+    const postId = (url.searchParams.get("postId") ?? "").trim();
+    const chatId = (url.searchParams.get("chatId") ?? "").trim();
+    if (!postId || !chatId) {
+      json(res, 400, { ok: false, error: "postId/chatId 参数缺失" });
+      return;
+    }
+    const { listChatPlans } = await import("./skill-run");
+    json(res, 200, { ok: true, plans: listChatPlans(postId, chatId) });
+    return;
+  }
+
+  if (method === "POST" && p === "/session-plan") {
+    // 规划回合（方案流第一步：先定 3 方案，确定后才进生成）；同步等待（上限 300s）
+    let postId = "";
+    let chatId = "";
+    let userAsk = "";
+    let streamFlag = false;
+    let focus: { name: string; platform: string; format: string; skill: string; mediaNote?: string } | undefined;
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as {
+        postId?: string;
+        chatId?: string;
+        message?: string;
+        stream?: boolean;
+        focus?: { name?: string; platform?: string; format?: string; skill?: string; mediaNote?: string };
+      };
+      postId = body.postId ?? "";
+      chatId = body.chatId ?? "";
+      userAsk = typeof body.message === "string" ? body.message : "";
+      if (body.focus && typeof body.focus.name === "string" && typeof body.focus.platform === "string") {
+        focus = {
+          name: body.focus.name,
+          platform: body.focus.platform,
+          format: body.focus.format ?? "IMAGE_TEXT",
+          skill: body.focus.skill ?? "",
+          mediaNote: body.focus.mediaNote,
+        };
+      }
+      streamFlag = !!body.stream;
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !chatId) {
+      json(res, 400, { ok: false, error: "postId/chatId 参数缺失" });
+      return;
+    }
+    if (streamFlag) {
+      // 流式：delta=pi 规划会话 assistant 过程文本增量，done=最终结果（同 JSON 口径）
+      const { send, close } = sseOpen(res);
+      void import("./skill-run").then(({ chatDirOf }) => sseStreamLive(req, { send, close: () => undefined }, `${chatDirOf(postId, chatId)}/plan-sessions`));
+      void (async () => {
+        try {
+          const { runPlanSession } = await import("./skill-run");
+          const { plans, reply } = await runPlanSession(postId, chatId, userAsk, focus);
+          send({ kind: "done", ok: true, plans, reply, chatId });
+        } catch (e) {
+          send({ kind: "error", ok: false, error: `规划失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+        } finally {
+          close();
+        }
+      })();
+      return;
+    }
+    try {
+      const { runPlanSession } = await import("./skill-run");
+      const { plans, reply } = await runPlanSession(postId, chatId, userAsk, focus);
+      json(res, 200, { ok: true, plans, reply, chatId });
+    } catch (e) {
+      json(res, 502, { ok: false, error: `规划失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+    }
+    return;
+  }
+
   if (method === "POST" && p === "/session-chat") {
-    // 发布会话聊天（Easel 对齐：每个发布一个聊天会话）：首回合=工作流 prompt，后续 --continue 续跑同会话；
-    // 草稿更新以 agent 写盘的 drafts/<postId>/<skill>.json 为准；同步等待（上限 300s）
+    // 发布会话聊天（Easel 对齐：一帖多条聊天记录；每条独立 pi 会话，首回合=工作流 prompt，后续 --continue 续跑）
+    // 草稿更新以 agent 写盘的 chats/<chatId>/<skill>.json 为准；同步等待（上限 300s）
     let postId = "";
     let skillSlug = "";
     let userAsk = "";
+    let chatId = "";
+    let plan: { id?: string; name?: string; desc?: string; platform?: string; format?: string; skill?: string; mediaNote?: string } | undefined;
+    let streamFlag = false;
     try {
-      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; skill?: string; message?: string };
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; skill?: string; message?: string; chatId?: string; stream?: boolean; plan?: { id?: string; name?: string; desc?: string; platform?: string; format?: string; skill?: string; mediaNote?: string } };
       postId = body.postId ?? "";
       skillSlug = body.skill ?? "";
       userAsk = typeof body.message === "string" ? body.message : "";
+      chatId = typeof body.chatId === "string" ? body.chatId : "";
+      plan = body.plan ?? undefined;
+      streamFlag = !!body.stream;
     } catch {
       json(res, 400, { ok: false, error: "JSON 解析失败" });
       return;
@@ -144,24 +293,156 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     try {
-      const { runSessionChat } = await import("./skill-run");
-      const result = await runSessionChat(postId, skillSlug, userAsk);
-      json(res, 200, { ok: true, ...result });
+      const { runSessionChat, newChatId } = await import("./skill-run");
+      const cid = chatId || newChatId();
+      if (streamFlag) {
+        // 流式：delta=pi 生成会话 assistant 过程文本增量，done=最终结果（同 JSON 口径）
+        const { send, close } = sseOpen(res);
+        void import("./skill-run").then(({ chatDirOf }) => sseStreamLive(req, { send, close: () => undefined }, `${chatDirOf(postId, cid)}/pi-sessions`));
+        try {
+          const result = await runSessionChat(postId, cid, skillSlug, userAsk, plan as Parameters<typeof runSessionChat>[4]);
+          send({ kind: "done", ok: true, chatId: cid, ...result });
+        } catch (e) {
+          send({ kind: "error", ok: false, chatId: cid, error: `会话执行失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
+        } finally {
+          close();
+        }
+        return;
+      }
+      const result = await runSessionChat(postId, cid, skillSlug, userAsk, plan as Parameters<typeof runSessionChat>[4]);
+      json(res, 200, { ok: true, chatId: cid, ...result });
     } catch (e) {
       json(res, 502, { ok: false, error: `会话执行失败：${e instanceof Error ? e.message : String(e)}`.slice(0, 300) });
     }
     return;
   }
 
-  if (method === "GET" && p === "/session-drafts") {
-    // 列某 Post 的草稿文件（面板刷新页重渲染出稿卡）
+  if (method === "GET" && p === "/session-chats") {
+    // 列某 Post 的聊天记录（左栏纪录列表：按最后活跃倒序）
     const postId = (url.searchParams.get("postId") ?? "").trim();
     if (!postId) {
       json(res, 400, { ok: false, error: "postId 参数缺失" });
       return;
     }
-    const { listPostDrafts } = await import("./skill-run");
-    json(res, 200, { ok: true, drafts: listPostDrafts(postId) });
+    const { listPostChats } = await import("./skill-run");
+    json(res, 200, { ok: true, chats: listPostChats(postId) });
+    return;
+  }
+
+  if (method === "POST" && p === "/session-chats") {
+    // 新建一条空聊天记录（sidebar「新对话」；Easel 对齐：纪录先落 meta，首条消息才起 pi 会话）
+    let postId = "";
+    let chatId = "";
+    let title = "";
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; chatId?: string; title?: string };
+      postId = body.postId ?? "";
+      chatId = body.chatId ?? "";
+      title = body.title ?? "";
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !chatId) {
+      json(res, 400, { ok: false, error: "postId/chatId 参数缺失" });
+      return;
+    }
+    try {
+      const { createChat } = await import("./skill-run");
+      createChat(postId, chatId, title);
+      json(res, 200, { ok: true, chatId });
+    } catch (e) {
+      json(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
+
+  if (method === "POST" && p === "/session-rename") {
+    // 改聊天记录名（sidebar 重命名）
+    let postId = "";
+    let chatId = "";
+    let title = "";
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; chatId?: string; title?: string };
+      postId = body.postId ?? "";
+      chatId = body.chatId ?? "";
+      title = (body.title ?? "").trim();
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !chatId || !title) {
+      json(res, 400, { ok: false, error: "postId/chatId/title 参数缺失" });
+      return;
+    }
+    try {
+      const { renameChat } = await import("./skill-run");
+      renameChat(postId, chatId, title);
+      json(res, 200, { ok: true });
+    } catch (e) {
+      json(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
+
+  if (method === "DELETE" && p === "/session-chats") {
+    // 删聊天记录（含 pi 会话+出稿目录）
+    let postId = "";
+    let chatId = "";
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as { postId?: string; chatId?: string };
+      postId = body.postId ?? "";
+      chatId = body.chatId ?? "";
+    } catch {
+      json(res, 400, { ok: false, error: "JSON 解析失败" });
+      return;
+    }
+    if (!postId || !chatId) {
+      json(res, 400, { ok: false, error: "postId/chatId 参数缺失" });
+      return;
+    }
+    try {
+      const { deleteChat } = await import("./skill-run");
+      deleteChat(postId, chatId);
+      json(res, 200, { ok: true });
+    } catch (e) {
+      json(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
+
+  if (method === "GET" && p === "/session-chat-history") {
+    // 读某条聊天记录的消息历史（解析 pi 会话 .jsonl，首条 user 换成用户原始要求）
+    const postId = (url.searchParams.get("postId") ?? "").trim();
+    const chatId = (url.searchParams.get("chatId") ?? "").trim();
+    if (!postId || !chatId) {
+      json(res, 400, { ok: false, error: "postId/chatId 参数缺失" });
+      return;
+    }
+    try {
+      const { readChatHistory } = await import("./skill-run");
+      json(res, 200, { ok: true, messages: readChatHistory(postId, chatId) });
+    } catch (e) {
+      json(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
+
+  if (method === "GET" && p === "/session-drafts") {
+    // 列某 Post 的草稿文件（带 chatId = 该纪录自己的出稿；不带 = 旧口径 post 根级，兼容冒烟遗留数据）
+    const postId = (url.searchParams.get("postId") ?? "").trim();
+    const chatId = (url.searchParams.get("chatId") ?? "").trim();
+    if (!postId) {
+      json(res, 400, { ok: false, error: "postId 参数缺失" });
+      return;
+    }
+    try {
+      const { listPostDrafts, listChatDrafts } = await import("./skill-run");
+      const drafts = chatId ? listChatDrafts(postId, chatId) : listPostDrafts(postId);
+      json(res, 200, { ok: true, drafts });
+    } catch (e) {
+      json(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
     return;
   }
 

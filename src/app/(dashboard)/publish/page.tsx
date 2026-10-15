@@ -9,6 +9,7 @@ import { FileText, ArrowUpRight, Flag } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { PostForm } from "@/components/publish/post-form";
 import { DocImportButton } from "@/components/publish/doc-import-button";
+import { PostDeleteButton } from "@/components/publish/post-delete-button";
 import { PostStatusBadge } from "@/components/publish/publish-status-badge";
 import {
   PLATFORM_LABEL,
@@ -53,7 +54,7 @@ export default async function PublishContentPage() {
         <div>
           <p className="product-eyebrow">Publish content</p>
           <h1 className="product-title">内容</h1>
-          <p className="product-subtitle">正文与媒体统一存放，多平台适配与排期在适配页完成。</p>
+          <p className="product-subtitle">正文与媒体统一存放；出稿、补媒体、批准与发布都在聊天页完成。</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/publish/hot" className="inline-flex">
@@ -63,12 +64,6 @@ export default async function PublishContentPage() {
             </Button>
           </Link>
           <DocImportButton />
-          <Link href="/publish/variants" className="inline-flex">
-            <Button variant="secondary">
-              去适配
-              <ArrowUpRight className="h-4 w-4" weight="bold" />
-            </Button>
-          </Link>
         </div>
       </header>
 
@@ -98,7 +93,7 @@ export default async function PublishContentPage() {
         <div className="mt-8 flex min-h-60 flex-col items-center justify-center border border-dashed border-white/16 bg-black/10 px-5 text-center">
           <Flag className="size-7 text-primary" weight="duotone" />
           <h2 className="mt-3 text-sm font-medium text-foreground">从第一篇内容开始</h2>
-          <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">在上方新建内容，再去适配页为各平台做适配版并批准发布。</p>
+          <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">在上方新建内容，点「发布」进聊天页出稿、补媒体、批准并发布。</p>
         </div>
       ) : (
         <section className="mt-8" aria-label="内容列表">
@@ -125,22 +120,20 @@ export default async function PublishContentPage() {
                     ))}
                   </div>
                 </div>
-                <PostStatusBadge status={post.status} />
-                <span className="text-xs tabular-nums text-muted-foreground">{formatDateTime(post.createdAt)}</span>
-                <Link
-                  href={`/publish/session/${post.id}`}
-                  className="flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5"
-                >
-                  会话创作
-                  <ArrowUpRight className="size-3.5" weight="bold" />
-                </Link>
-                <Link
-                  href="/publish/variants"
-                  className="flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5"
-                >
-                  适配
-                  <ArrowUpRight className="size-3.5" weight="bold" />
-                </Link>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <PostStatusBadge status={post.status} />
+                  <span className="text-xs tabular-nums text-muted-foreground">{formatDateTime(post.createdAt)}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <PostDeleteButton postId={post.id} postTitle={post.title} />
+                  <Link
+                    href={`/publish/session/${post.id}`}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                  >
+                    发布
+                    <ArrowUpRight className="size-3.5" weight="bold" />
+                  </Link>
+                </div>
               </article>
             ))}
           </div>

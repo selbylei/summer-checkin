@@ -131,10 +131,10 @@ export function ScheduleBoard() {
         <Timer className="size-7 text-primary" weight="duotone" />
         <h2 className="mt-3 text-sm font-medium text-foreground">还没有排期任务</h2>
         <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-          在适配页对已批准的适配版点「批准并发布」，任务会立刻进入发布队列。
+          在聊天页的产物栏对适配版点「批准并发布」，任务会立刻进入发布队列。
         </p>
         <div className="mt-3">
-          <Link href="/publish/variants" className="text-xs font-medium text-primary hover:underline">去适配页</Link>
+          <Link href="/publish" className="text-xs font-medium text-primary hover:underline">去内容页</Link>
         </div>
       </div>
     );

@@ -46,3 +46,18 @@ export async function PATCH(
   const updated = await prisma.post.update({ where: { id }, data });
   return NextResponse.json(updated);
 }
+
+// DELETE：删整条内容（DB 级联：Variant→Job→Logs 均 onDelete: Cascade）；磁盘孤儿（drafts/media 目录）P1 容忍
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const post = await findOwnedPost(id, user.id);
+  if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await prisma.post.delete({ where: { id: post.id } });
+  return NextResponse.json({ ok: true });
+}
